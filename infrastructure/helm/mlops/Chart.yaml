@@ -1,0 +1,15 @@
+apiVersion: v2
+name: mlops
+description: End-to-end MLOps Platform — PFE INSOMEA × ESPRIT
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - mlops
+  - mlflow
+  - kubeflow
+  - kserve
+home: https://github.com/Firas-Mahjoubi/pfe-mlops
+maintainers:
+  - name: Firas Mahjoubi
+    email: firas.mahjoubi@esprit.tn

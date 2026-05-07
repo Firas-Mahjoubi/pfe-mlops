@@ -1,0 +1,160 @@
+# Backend ServiceAccount with permissions to manage KServe InferenceServices
+# and Kubeflow Pipelines runs from inside the cluster.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: backend
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "mlops.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: backend-mlops
+  labels:
+    {{- include "mlops.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["serving.kserve.io"]
+    resources: ["inferenceservices"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "pods/exec", "events", "services", "configmaps"]
+    verbs: ["get", "list", "watch", "create"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["argoproj.io"]
+    resources: ["workflows", "workflowtemplates"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: backend-mlops
+  labels:
+    {{- include "mlops.labels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: backend
+    namespace: {{ .Values.namespace }}
+roleRef:
+  kind: ClusterRole
+  name: backend-mlops
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "mlops.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+  selector:
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/instance: {{ .Release.Name }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "mlops.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  replicas: {{ .Values.backend.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: backend
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        {{- include "mlops.labels" . | nindent 8 }}
+        app.kubernetes.io/component: backend
+    spec:
+      serviceAccountName: backend
+      imagePullSecrets:
+        - name: {{ .Values.imagePullSecret }}
+      containers:
+        - name: backend
+          image: {{ include "mlops.image" (dict "root" . "repo" .Values.backend.image.repository) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            # Database
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secretName }}
+                  key: DATABASE_URL
+            - name: JWT_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secretName }}
+                  key: JWT_SECRET_KEY
+
+            # MLflow
+            - name: MLFLOW_TRACKING_URI
+              value: "http://mlflow:5000"
+
+            # MinIO
+            - name: MINIO_ENDPOINT
+              value: "minio:9000"
+            - name: MINIO_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secretName }}
+                  key: MINIO_ACCESS_KEY
+            - name: MINIO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secretName }}
+                  key: MINIO_SECRET_KEY
+            - name: MINIO_SECURE
+              value: "false"
+
+            # Kubeflow Pipelines
+            - name: KFP_HOST
+              value: {{ .Values.kfp.host | quote }}
+            - name: KFP_NAMESPACE
+              value: {{ .Values.kfp.namespace | quote }}
+
+            # KServe
+            - name: KSERVE_NAMESPACE
+              value: {{ .Values.kserve.namespace | quote }}
+            - name: KSERVE_SERVICE_ACCOUNT
+              value: {{ .Values.kserve.serviceAccount | quote }}
+
+            # CORS — public hostname
+            - name: CORS_ORIGINS
+              value: "https://{{ .Values.ingress.host }}"
+
+            # Schema is owned by Alembic in prod
+            - name: RUN_CREATE_ALL
+              value: "0"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 60
+            periodSeconds: 30
+          resources:
+            {{- toYaml .Values.backend.resources | nindent 12 }}

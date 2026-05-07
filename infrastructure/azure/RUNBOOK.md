@@ -241,15 +241,28 @@ kubectl apply -f https://github.com/knative/serving/releases/download/knative-v1
 # Install KServe
 kubectl apply -f https://github.com/kserve/kserve/releases/download/v0.13.1/kserve.yaml
 kubectl apply -f https://github.com/kserve/kserve/releases/download/v0.13.1/kserve-cluster-resources.yaml
+
+# Fix the broken kube-rbac-proxy image (gcr.io/kubebuilder/kube-rbac-proxy was moved)
+kubectl set image deployment/kserve-controller-manager -n kserve \
+  kube-rbac-proxy=quay.io/brancz/kube-rbac-proxy:v0.18.0
 ```
 
 ### 4.4 — Install Kubeflow Pipelines
 
 ```bash
-export PIPELINE_VERSION=2.3.0
+# Use 2.4.1 — the 2.3.0 manifest references gcr.io images that no longer exist
+export PIPELINE_VERSION=2.4.1
 kubectl apply -k "github.com/kubeflow/pipelines/manifests/kustomize/cluster-scoped-resources?ref=$PIPELINE_VERSION"
 kubectl wait --for condition=established --timeout=60s crd/applications.app.k8s.io
 kubectl apply -k "github.com/kubeflow/pipelines/manifests/kustomize/env/platform-agnostic?ref=$PIPELINE_VERSION"
+
+# Fix the bundled MinIO image (gcr.io/ml-pipeline/minio:...license-compliance was removed).
+# The same release exists on Docker Hub at minio/minio.
+kubectl set image deployment/minio -n kubeflow minio=minio/minio:RELEASE.2019-08-14T20-37-41Z
+
+# After minio is up, restart ml-pipeline so it reconnects
+kubectl rollout status deployment/minio -n kubeflow --timeout=120s
+kubectl rollout restart deployment/ml-pipeline -n kubeflow
 ```
 
 ### 4.5 — Apply the mlops namespace + KServe SA

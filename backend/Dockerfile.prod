@@ -1,0 +1,52 @@
+# ─── Stage 1: build wheels ──────────────────────────────────────────────────
+FROM python:3.11-slim AS builder
+
+WORKDIR /build
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends gcc libpq-dev \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+
+# Install runtime deps + gunicorn (prod-only) into an isolated prefix
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt \
+ && pip install --no-cache-dir --prefix=/install "gunicorn==23.0.0"
+
+
+# ─── Stage 2: runtime image ─────────────────────────────────────────────────
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PORT=8000
+
+# Runtime libs only (no compiler)
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libpq5 curl \
+ && rm -rf /var/lib/apt/lists/* \
+ && useradd --create-home --uid 1001 app
+
+WORKDIR /app
+
+COPY --from=builder /install /usr/local
+COPY --chown=app:app . /app
+
+# In production Alembic owns the schema. Disable create_all on boot.
+ENV RUN_CREATE_ALL=0
+
+USER app
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD curl -fsS http://127.0.0.1:8000/health || exit 1
+
+# 2 uvicorn workers fits a 1-vCPU pod; bump via env in values-prod.yaml later.
+CMD ["gunicorn", "app.main:app", \
+     "-k", "uvicorn.workers.UvicornWorker", \
+     "-w", "2", \
+     "-b", "0.0.0.0:8000", \
+     "--access-logfile", "-", \
+     "--error-logfile", "-", \
+     "--timeout", "120"]

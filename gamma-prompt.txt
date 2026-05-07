@@ -1,0 +1,171 @@
+End-to-End MLOps Platform on Kubernetes
+
+PFE — First Project Review · ESPRIT × INSOMEA · April 2026
+
+Student: Firas Mahjoubi
+Academic supervisor (ESPRIT): Ben Mardes Achref
+Company supervisor (INSOMEA): Amine Gonji
+Industry expert: M. Benarous Abderrahmen
+Host company: INSOMEA — Microsoft Cloud Gold Partner
+
+---
+
+Table of Contents
+
+1. Company Introduction
+2. The Problem
+3. Project Objectives
+4. A Day on the Platform
+5. Technologies
+6. Where We Are Today
+7. What's Next
+8. Thank You
+
+---
+
+Company Introduction: INSOMEA
+
+INSOMEA is a Microsoft Cloud Gold Partner. They help enterprises across the MEA region adopt Microsoft 365, Azure, and cybersecurity solutions.
+
+A few numbers:
+50+ employees
+500+ customers
+6 offices across Tunisia, Bahrain, France, Algeria, Morocco, Ivory Coast
+8+ years of expertise
+5 Microsoft Partner of the Year awards
+
+Why this project fits INSOMEA: their core specialty is Microsoft cloud. This MLOps platform is designed to deploy on Microsoft Azure — directly extending INSOMEA's expertise into the AI and ML space.
+
+---
+
+The Problem
+
+Imagine a data scientist who has trained a great model on her laptop. It hits 95% accuracy. Now she needs it live in production. Six weeks later, it's still not deployed.
+
+Why?
+
+The model worked on her laptop but breaks in production. Different libraries, different environment.
+
+She can't remember which experiment produced the best model. Too many tries, no tracking.
+
+She has to learn Docker, Kubernetes, and CI/CD just to deploy a Python file.
+
+She has no way to monitor whether the model still works once it's live.
+
+The result: 70% of machine learning models never reach production (Gartner, 2022).
+
+We built a platform that solves all four problems automatically.
+
+---
+
+Project Objectives
+
+Make machine learning operations as simple as web development.
+
+Five concrete promises:
+
+Upload your Python script. Get a live REST API in minutes — no Docker, no YAML, no DevOps knowledge required.
+
+Every experiment is tracked automatically: metrics, parameters, and model artifacts. Fully reproducible.
+
+A versioned model registry. Promote, archive, or roll back any version with one click.
+
+Live monitoring built in. See CPU, memory, and traffic the moment the model goes live.
+
+The same platform, anywhere. Runs on a laptop, in a private datacenter, or on Microsoft Azure.
+
+---
+
+A Day on the Platform
+
+Here is the entire user workflow, from code to live API:
+
+1. Create a project. Give it a name and upload your training code as a .zip file.
+
+2. Trigger training. One click. The platform runs it on Kubernetes automatically.
+
+3. Watch live logs. A built-in terminal shows training progress in real time.
+
+4. See your experiments. Every run is in the registry with its metrics.
+
+5. Promote the best model. One click moves it to "Production".
+
+6. Deploy as a REST API. One click. The endpoint URL is ready in about 30 seconds.
+
+7. Test the prediction live. A built-in tester lets you try inputs immediately.
+
+Six clicks. Zero infrastructure code.
+
+---
+
+Technologies
+
+100% open-source, industry-standard tools.
+
+Three layers:
+
+The interface — Angular 19 and Tailwind. The web app users interact with.
+
+The brain — FastAPI and Python. The backend that orchestrates everything.
+
+The factory — Kubernetes, Kubeflow, MLflow, KServe. The engine that runs training and serving.
+
+Why this stack: every tool we picked is the de-facto standard in its space. No vendor lock-in. The same architecture runs on a laptop today and on Microsoft Azure tomorrow.
+
+---
+
+Where We Are Today
+
+Phase: development and testing.
+
+What is fully working — the entire core flow, end to end:
+Authentication, projects, code upload
+Training pipelines (custom user code and prebuilt sklearn templates)
+Automatic experiment tracking via MLflow
+Model registry with promote, archive, delete
+One-click KServe deployment with auto-recovery
+Real-time inference test in the UI
+Live dashboard with cluster CPU, memory, and active runs
+Professional log terminal with filter, search, copy, download
+
+In testing right now:
+End-to-end flows on a fresh Kubernetes cluster
+Edge cases in custom user code
+Failure recovery scenarios
+
+Starting next:
+Microsoft Azure deployment work
+
+---
+
+What's Next
+
+Four workstreams to the final defense:
+
+Cloud — migrate the platform to Microsoft Azure. The specific Azure services to use will be confirmed with you today.
+
+Monitoring — production metrics: request rate, latency, basic drift alerts.
+
+Polish — UI improvements: model comparison view, signup page redesign, accessibility pass.
+
+Documentation — user guide, installation guide, final PFE report, defense rehearsal.
+
+What I am asking from you today:
+
+Validate the architecture and the project scope.
+
+Agree on the approach for the Azure migration.
+
+Help me pick the three highest-priority remaining tasks.
+
+Set the date of the next checkpoint.
+
+---
+
+Thank You
+
+Questions?
+
+From a Python file to a live REST API in five clicks.
+
+Firas Mahjoubi · ESPRIT × INSOMEA · April 2026

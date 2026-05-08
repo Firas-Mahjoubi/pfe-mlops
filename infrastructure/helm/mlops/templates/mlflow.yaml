@@ -46,9 +46,7 @@ spec:
             - name: http
               containerPort: 5000
           env:
-            # Backend store: shared Postgres (separate DB for clean isolation)
-            - name: BACKEND_STORE_URI
-              value: "postgresql+psycopg2://{{ .Values.postgres.user }}:$(POSTGRES_PASSWORD)@postgres:5432/{{ .Values.postgres.database }}"
+            # Postgres credentials (loaded BEFORE the URL so shell can interpolate)
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -68,15 +66,13 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.secretName }}
                   key: MINIO_SECRET_KEY
-            - name: ARTIFACT_ROOT
-              value: "s3://{{ .Values.mlflow.artifactBucket }}/"
           command: ["sh", "-c"]
           args:
             - |
               pip install --no-cache-dir psycopg2-binary boto3 && \
               mlflow server \
-                --backend-store-uri "$BACKEND_STORE_URI" \
-                --default-artifact-root "$ARTIFACT_ROOT" \
+                --backend-store-uri "postgresql+psycopg2://{{ .Values.postgres.user }}:${POSTGRES_PASSWORD}@postgres:5432/{{ .Values.postgres.database }}" \
+                --default-artifact-root "s3://{{ .Values.mlflow.artifactBucket }}/" \
                 --host 0.0.0.0 \
                 --port 5000
           readinessProbe:

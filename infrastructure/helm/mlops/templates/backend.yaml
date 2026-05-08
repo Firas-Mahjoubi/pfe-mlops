@@ -141,9 +141,9 @@ spec:
             - name: CORS_ORIGINS
               value: "https://{{ .Values.ingress.host }}"
 
-            # Schema is owned by Alembic in prod
+            # Auto-create-all on first boot (Alembic migrations not yet generated)
             - name: RUN_CREATE_ALL
-              value: "0"
+              value: "1"
           readinessProbe:
             httpGet:
               path: /health

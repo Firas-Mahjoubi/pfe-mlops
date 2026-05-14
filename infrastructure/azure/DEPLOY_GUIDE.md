@@ -131,7 +131,31 @@ On GitHub: your repo → **Settings → Secrets and variables → Actions → Ne
 Confirm: **Settings → Secrets → Actions** lists all three. The values are now
 write-only — even you can't read them back.
 
-### Step 6 — Confirm the workflow file is on `main`
+### Step 6 — Create the in-cluster `mlops-secrets` Secret
+
+The Helm chart references a Secret named `mlops-secrets` that holds the platform's runtime credentials (Postgres password, JWT signing key, MinIO admin user/pass). Create it once after the namespace exists:
+
+```powershell
+# Generate strong random values — alphanumeric ONLY (no URL-reserved chars
+# like : / ? # [ ] @ ! which would break DATABASE_URL parsing)
+$PG_PASSWORD = -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 32 | ForEach-Object {[char]$_})
+$JWT_SECRET = -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 48 | ForEach-Object {[char]$_})
+
+# Save these in a password manager — you'll need PG_PASSWORD to psql into the DB later
+Write-Host "POSTGRES_PASSWORD: $PG_PASSWORD"
+Write-Host "JWT_SECRET:        $JWT_SECRET"
+
+kubectl create secret generic mlops-secrets -n mlops `
+  --from-literal=POSTGRES_PASSWORD="$PG_PASSWORD" `
+  --from-literal=DATABASE_URL="postgresql+asyncpg://mlops:${PG_PASSWORD}@postgres.mlops.svc.cluster.local:5432/mlops_platform" `
+  --from-literal=JWT_SECRET_KEY="$JWT_SECRET" `
+  --from-literal=MINIO_ACCESS_KEY="minioadmin" `
+  --from-literal=MINIO_SECRET_KEY="minioadmin123"
+```
+
+Without this Secret, every pod that references it (backend, postgres, minio, mlflow) fails with `CreateContainerConfigError` and the Helm `--wait` times out. The frontend doesn't reference it (no auth), which is why the frontend pod comes up even when this is missing — handy diagnostic signal.
+
+### Step 7 — Confirm the workflow file is on `main`
 
 The workflow lives at [.github/workflows/deploy.yml](../../.github/workflows/deploy.yml). It should already be in the repo. Verify:
 

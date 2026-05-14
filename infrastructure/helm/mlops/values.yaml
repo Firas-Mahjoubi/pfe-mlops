@@ -67,8 +67,10 @@ mlflow:
   storageClass: managed-csi
   artifactBucket: mlflow-artifacts
   resources:
-    requests: { cpu: 100m, memory: 256Mi }
-    limits:   { cpu: 500m, memory: 512Mi }
+    # Gunicorn boots 4 sync workers + psycopg2 + boto3 -- 512Mi gets OOMKilled
+    # within ~60s under any load. 1.5Gi gives comfortable headroom.
+    requests: { cpu: 100m, memory: 512Mi }
+    limits:   { cpu: 500m, memory: 1536Mi }
 
 # ─── Kubeflow Pipelines connection (already installed cluster-side) ─────────
 kfp:

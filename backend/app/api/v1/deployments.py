@@ -93,14 +93,17 @@ def _serialize(dep: Deployment) -> dict:
 @router.get("/kserve-health")
 async def kserve_health(current_user: User = Depends(get_current_user)):
     """Check KServe/webhook health and return pod statuses."""
-    from app.config import settings as cfg
     result = {"webhook_ok": False, "pods": [], "advice": ""}
     try:
-        from kubernetes import client as k8s, config as k8s_cfg
-        k8s_cfg.load_kube_config(config_file=cfg.KUBECONFIG)
+        # Route through the shared loader so the Docker host rewrite
+        # (127.0.0.1 → host.docker.internal) is applied and not silently lost.
+        from app.services.k8s_client import ensure_k8s_loaded
+        from kubernetes import client as k8s
+        ensure_k8s_loaded()
 
-        # Check KServe controller pods
-        v1 = k8s.CoreV1Api()
+        # Build the client from a fresh (rewritten) Configuration copy.
+        cfg = k8s.Configuration.get_default_copy()
+        v1 = k8s.CoreV1Api(api_client=k8s.ApiClient(configuration=cfg))
         pods = v1.list_namespaced_pod(namespace="kserve")
         pod_list = []
         all_running = True
@@ -327,27 +330,22 @@ async def delete_deployment(
 
 
 _cpu_cache: dict[str, tuple[float, int]] = {}  # pod_name -> (timestamp, cpu_ns)
-_k8s_loaded = False
-
-
-def _ensure_k8s() -> None:
-    global _k8s_loaded
-    if _k8s_loaded:
-        return
-    from kubernetes import config as k8s_config
-    try:
-        k8s_config.load_incluster_config()
-    except Exception:
-        k8s_config.load_kube_config(config_file="/app/kubeconfig")
-    _k8s_loaded = True
 
 
 def _read_pod_metrics_sync(svc_name: str, namespace: str) -> Optional[dict]:
-    _ensure_k8s()
+    # Use the shared k8s bootstrap so the Docker host rewrite is applied
+    # consistently across the cluster-metrics and pod-metrics code paths.
+    from app.services.k8s_client import ensure_k8s_loaded
+    ensure_k8s_loaded()
     from kubernetes import client as k8s_client
     from kubernetes.stream import stream as k8s_stream
 
-    v1 = k8s_client.CoreV1Api()
+    # Build the API client from a fresh copy of the default Configuration so we
+    # always get the rewritten host (host.docker.internal) even if a prior
+    # client was constructed before the rewrite.
+    cfg = k8s_client.Configuration.get_default_copy()
+    api_client = k8s_client.ApiClient(configuration=cfg)
+    v1 = k8s_client.CoreV1Api(api_client=api_client)
 
     # Find a running pod for this InferenceService
     pods = v1.list_namespaced_pod(

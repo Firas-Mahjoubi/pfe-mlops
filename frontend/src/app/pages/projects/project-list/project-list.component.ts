@@ -2,7 +2,7 @@ import { Component, inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
-import { ProjectService } from '../../../core/services/project.service';
+import { ProjectService, ProjectStats } from '../../../core/services/project.service';
 import { AdminService } from '../../../core/services/admin.service';
 import { Project } from '../../../core/models/project.model';
 import { IconComponent } from '../../../shared/ui/icon/icon.component';
@@ -126,9 +126,9 @@ type ViewMode = 'table' | 'grid';
               </div>
               <div><app-status [s]="statusFor(p)"></app-status></div>
               <div class="text-[12px] text-ink2 mono">&#64;{{ ownerFor(p) }}</div>
-              <div class="text-right mono text-[12px] text-ink">—</div>
-              <div class="text-right mono text-[12px] text-ink">—</div>
-              <div class="text-right mono text-[12px] text-ink">—</div>
+              <div class="text-right mono text-[12px]" [class.text-ink]="statFor(p, 'runs') > 0" [class.text-ink3]="statFor(p, 'runs') === 0">{{ statFor(p, 'runs') || '—' }}</div>
+              <div class="text-right mono text-[12px]" [class.text-ink]="statFor(p, 'experiments') > 0" [class.text-ink3]="statFor(p, 'experiments') === 0">{{ statFor(p, 'experiments') || '—' }}</div>
+              <div class="text-right mono text-[12px]" [class.text-ink]="statFor(p, 'models') > 0" [class.text-ink3]="statFor(p, 'models') === 0">{{ statFor(p, 'models') || '—' }}</div>
               <div class="text-right pr-2 text-[11.5px] text-ink2">{{ p.updated_at | date: 'MMM d' }}</div>
               <div class="flex justify-end">
                 <button class="opacity-0 group-hover:opacity-100 text-ink3 hover:text-bad transition-colors"
@@ -163,15 +163,15 @@ type ViewMode = 'table' | 'grid';
               </div>
               <div class="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-white/5">
                 <div>
-                  <div class="mono text-[14px] text-ink">—</div>
+                  <div class="mono text-[14px]" [class.text-ink]="statFor(p, 'runs') > 0" [class.text-ink3]="statFor(p, 'runs') === 0">{{ statFor(p, 'runs') || '—' }}</div>
                   <div class="text-[10px] text-ink3 uppercase tracking-wider">runs</div>
                 </div>
                 <div>
-                  <div class="mono text-[14px] text-ink">—</div>
+                  <div class="mono text-[14px]" [class.text-ink]="statFor(p, 'experiments') > 0" [class.text-ink3]="statFor(p, 'experiments') === 0">{{ statFor(p, 'experiments') || '—' }}</div>
                   <div class="text-[10px] text-ink3 uppercase tracking-wider">exp</div>
                 </div>
                 <div>
-                  <div class="mono text-[14px] text-ink">—</div>
+                  <div class="mono text-[14px]" [class.text-ink]="statFor(p, 'models') > 0" [class.text-ink3]="statFor(p, 'models') === 0">{{ statFor(p, 'models') || '—' }}</div>
                   <div class="text-[10px] text-ink3 uppercase tracking-wider">models</div>
                 </div>
               </div>
@@ -273,6 +273,7 @@ export class ProjectListComponent implements OnInit {
 
   projects: Project[] = [];
   filtered: Project[] = [];
+  statsByProject: Record<string, ProjectStats> = {};
   q = '';
   sortBy: SortKey = 'updated';
   statusFilter: StatusFilter = 'all';
@@ -298,6 +299,19 @@ export class ProjectListComponent implements OnInit {
         this.apply();
       },
     });
+    this.projectService.stats().subscribe({
+      next: (stats) => {
+        this.statsByProject = {};
+        for (const s of stats || []) {
+          this.statsByProject[s.project_id] = s;
+        }
+      },
+      error: () => { this.statsByProject = {}; },
+    });
+  }
+
+  statFor(p: Project, field: 'runs' | 'experiments' | 'models' | 'deployments'): number {
+    return this.statsByProject[p.id]?.[field] ?? 0;
   }
 
   apply(): void {

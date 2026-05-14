@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.database import get_db
+from app.models.deployment import Deployment, DeploymentStatus
 from app.models.ml_model import MLModel, ModelStage
 from app.models.project import Project
 from app.models.user import User
@@ -176,15 +177,9 @@ async def delete_model_version(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    try:
-        await mlflow_service.delete_model_version(model_name, version)
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Failed to delete model version from MLflow: {str(e)}",
-        )
-
-    # Remove DB row
+    # Safety check: refuse deletion while an active deployment serves this version.
+    # Without this, MLflow rejects the delete (model is being served) and the user
+    # sees a confusing 502. Surface a clear, actionable 409 instead.
     db_result = await db.execute(
         select(MLModel).where(
             MLModel.mlflow_model_name == model_name,
@@ -193,6 +188,45 @@ async def delete_model_version(
     )
     row = db_result.scalar_one_or_none()
     if row:
+        dep_q = await db.execute(
+            select(Deployment).where(
+                Deployment.model_id == row.id,
+                Deployment.status != DeploymentStatus.DELETED,
+            )
+        )
+        active_dep = dep_q.scalar_one_or_none()
+        if active_dep:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"Cannot delete: model is currently deployed as "
+                    f"'{active_dep.inference_service_name}' "
+                    f"(status={active_dep.status.value}). "
+                    f"Delete the deployment first."
+                ),
+            )
+
+    try:
+        await mlflow_service.delete_model_version(model_name, version)
+    except Exception as e:
+        # If MLflow already lost the version (e.g. previous attempt soft-deleted it
+        # or it was removed out-of-band), don't block the DB cleanup. Re-raise for
+        # any other error so the user sees what went wrong.
+        msg = str(e)
+        if "404" not in msg and "not found" not in msg.lower():
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Failed to delete model version from MLflow: {msg}",
+            )
+
+    # Clean up history rows (DELETED deployments and old deployments) that still
+    # reference this MLModel via FK — we already refused above if any are active,
+    # so what remains is historical and safe to remove.
+    if row:
+        from sqlalchemy import delete as sqla_delete
+        await db.execute(
+            sqla_delete(Deployment).where(Deployment.model_id == row.id)
+        )
         await db.delete(row)
         await db.commit()
 

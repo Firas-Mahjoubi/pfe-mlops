@@ -5,6 +5,10 @@ import { interval, Subscription } from 'rxjs';
 import { ProjectService } from '../../core/services/project.service';
 import { PipelineService, PipelineRun, RunMetrics } from '../../core/services/pipeline.service';
 import { DeploymentService, Deployment, DeploymentMetrics } from '../../core/services/deployment.service';
+import { ExperimentService, MlflowRunWithProject } from '../../core/services/experiment.service';
+import { ModelService, GlobalModelEntry, ModelVersion } from '../../core/services/model.service';
+import { ActivityService, ActivityEntry, ActivityTone } from '../../core/services/activity.service';
+import { ClusterService, ClusterMetrics } from '../../core/services/cluster.service';
 import { Project } from '../../core/models/project.model';
 import { IconComponent, IconName } from '../../shared/ui/icon/icon.component';
 import { BtnComponent } from '../../shared/ui/btn/btn.component';
@@ -41,12 +45,6 @@ interface UtilStat {
   color: string;
 }
 
-interface ClusterSeries {
-  path: string;
-  color: string;
-  opacity: number;
-}
-
 @Component({
   selector: 'app-dashboard',
   standalone: true,
@@ -69,7 +67,9 @@ interface ClusterSeries {
               <div class="text-[11px] font-semibold tracking-[0.08em] text-ink3 uppercase">Active Projects</div>
               <div class="mt-1.5 flex items-baseline gap-2">
                 <span class="text-[28px] font-semibold tracking-tight leading-none">{{ activeProjects }}</span>
-                <span class="text-[11px] text-good">+{{ projectsDelta }}</span>
+                @if (projectsDelta > 0) {
+                  <span class="text-[11px] text-good">+{{ projectsDelta }} this week</span>
+                }
               </div>
               <div class="text-[11px] text-ink3 mt-1">{{ projectsTotal }} total</div>
             </div>
@@ -80,10 +80,19 @@ interface ClusterSeries {
         <div class="col-span-3 bg-card border border-line rounded-lg p-3.5 flex flex-col justify-between min-h-[108px] shadow-card">
           <div class="flex items-start justify-between">
             <div>
-              <div class="text-[11px] font-semibold tracking-[0.08em] text-ink3 uppercase">Experiments · 7d</div>
+              <div class="text-[11px] font-semibold tracking-[0.08em] text-ink3 uppercase">Experiments</div>
               <div class="mt-1.5 flex items-baseline gap-2">
-                <span class="text-[28px] font-semibold tracking-tight leading-none">119</span>
-                <span class="text-[11px] text-good">+18</span>
+                <span class="text-[28px] font-semibold tracking-tight leading-none">{{ experimentsTotal }}</span>
+                @if (experimentsLast7 > 0) {
+                  <span class="text-[11px] text-good">+{{ experimentsLast7 }} this week</span>
+                }
+              </div>
+              <div class="text-[11px] text-ink3 mt-1">
+                @if (experimentsTodayDelta > 0) {
+                  {{ experimentsTodayDelta }} today
+                } @else {
+                  all-time runs
+                }
               </div>
             </div>
             <div class="opacity-90"><app-bars [data]="expBars" [w]="160" [h]="36"></app-bars></div>
@@ -95,10 +104,12 @@ interface ClusterSeries {
             <div>
               <div class="text-[11px] font-semibold tracking-[0.08em] text-ink3 uppercase">Models Registered</div>
               <div class="mt-1.5 flex items-baseline gap-2">
-                <span class="text-[28px] font-semibold tracking-tight leading-none">39</span>
-                <span class="text-[11px] text-good">+3</span>
+                <span class="text-[28px] font-semibold tracking-tight leading-none">{{ modelsTotal }}</span>
+                @if (modelsLast7Delta > 0) {
+                  <span class="text-[11px] text-good">+{{ modelsLast7Delta }} this week</span>
+                }
               </div>
-              <div class="text-[11px] text-ink3 mt-1">6 in production</div>
+              <div class="text-[11px] text-ink3 mt-1">{{ modelsInProduction }} in production</div>
             </div>
             <div class="opacity-90"><app-sparkline [data]="modelsSpark" [w]="160" [h]="36" color="#85F4FF"></app-sparkline></div>
           </div>
@@ -109,10 +120,14 @@ interface ClusterSeries {
             <div>
               <div class="text-[11px] font-semibold tracking-[0.08em] text-ink3 uppercase">Deployments</div>
               <div class="mt-1.5 flex items-baseline gap-2">
-                <span class="text-[28px] font-semibold tracking-tight leading-none">6</span>
-                <span class="text-[11px] text-warn">1 degraded</span>
+                <span class="text-[28px] font-semibold tracking-tight leading-none">{{ deploymentsTotal }}</span>
+                @if (deploymentsFailed > 0) {
+                  <span class="text-[11px] text-warn">{{ deploymentsFailed }} failed</span>
+                } @else if (deploymentsCreating > 0) {
+                  <span class="text-[11px] text-cyan3">{{ deploymentsCreating }} creating</span>
+                }
               </div>
-              <div class="text-[11px] text-ink3 mt-1">4 prod · 1 staging · 1 stopped</div>
+              <div class="text-[11px] text-ink3 mt-1">{{ deploymentsReady }} ready · {{ deploymentsCreating }} creating · {{ deploymentsFailed }} failed</div>
             </div>
             <div class="opacity-90"><app-sparkline [data]="deploySpark" [w]="160" [h]="36" color="#B8FFF9"></app-sparkline></div>
           </div>
@@ -190,54 +205,55 @@ interface ClusterSeries {
                     <div class="mono text-[11px] text-ink2 shrink-0">{{ deploymentAge(d) }}</div>
                     <app-status [s]="d.status === 'READY' ? 'active' : 'running'"></app-status>
                   </div>
-                  <div class="ml-[92px] grid grid-cols-3 gap-3">
-                    <!-- CPU -->
-                    <div>
-                      <div class="flex justify-between mb-1">
-                        <span class="text-[10px] text-ink3">CPU</span>
-                        <span class="mono text-[10px] text-ink">
-                          {{ deploymentMetrics[d.id]?.cpu_pct != null ? (deploymentMetrics[d.id].cpu_pct + '%') : '—' }}
-                        </span>
+                  @if (deploymentMetrics[d.id]) {
+                    <div class="ml-[92px] grid grid-cols-3 gap-3">
+                      <!-- CPU -->
+                      <div>
+                        <div class="flex justify-between mb-1">
+                          <span class="text-[10px] text-ink3">CPU</span>
+                          <span class="mono text-[10px] text-ink">
+                            {{ deploymentMetrics[d.id].cpu_pct != null ? (deploymentMetrics[d.id].cpu_pct + '%') : '—' }}
+                          </span>
+                        </div>
+                        <div class="h-1 rounded-full bg-white/5 overflow-hidden">
+                          @if (deploymentMetrics[d.id].cpu_pct != null) {
+                            <div class="h-full rounded-full bg-cyan3/70" [style.width.%]="deploymentMetrics[d.id].cpu_pct"></div>
+                          }
+                        </div>
                       </div>
-                      <div class="h-1 rounded-full bg-white/5 overflow-hidden">
-                        @if (deploymentMetrics[d.id]?.cpu_pct != null) {
-                          <div class="h-full rounded-full bg-cyan3/70" [style.width.%]="deploymentMetrics[d.id].cpu_pct"></div>
-                        } @else {
-                          <div class="h-full w-1/4 rounded-full bg-white/10"></div>
-                        }
-                      </div>
-                    </div>
-                    <!-- RAM -->
-                    <div>
-                      <div class="flex justify-between mb-1">
-                        <span class="text-[10px] text-ink3">RAM</span>
-                        <span class="mono text-[10px] text-ink">
-                          {{ deploymentMetrics[d.id] ? (deploymentMetrics[d.id].mem_used_mi + ' Mi / ' + deploymentMetrics[d.id].mem_limit_gi + ' Gi') : '—' }}
-                        </span>
-                      </div>
-                      <div class="h-1 rounded-full bg-white/5 overflow-hidden">
-                        @if (deploymentMetrics[d.id]) {
+                      <!-- RAM -->
+                      <div>
+                        <div class="flex justify-between mb-1">
+                          <span class="text-[10px] text-ink3">RAM</span>
+                          <span class="mono text-[10px] text-ink">
+                            {{ deploymentMetrics[d.id].mem_used_mi }} Mi / {{ deploymentMetrics[d.id].mem_limit_gi }} Gi
+                          </span>
+                        </div>
+                        <div class="h-1 rounded-full bg-white/5 overflow-hidden">
                           <div class="h-full rounded-full bg-cyan2/70" [style.width.%]="deploymentMetrics[d.id].mem_pct"></div>
-                        } @else {
-                          <div class="h-full w-1/4 rounded-full bg-white/10"></div>
-                        }
+                        </div>
+                      </div>
+                      <!-- GPU -->
+                      <div>
+                        <div class="flex justify-between mb-1">
+                          <span class="text-[10px] text-ink3">GPU</span>
+                          <span class="mono text-[10px] text-ink">
+                            {{ deploymentMetrics[d.id].gpu ? (deploymentMetrics[d.id].gpu + '×') : '—' }}
+                          </span>
+                        </div>
+                        <div class="h-1 rounded-full bg-white/5 overflow-hidden">
+                          @if (deploymentMetrics[d.id].gpu) {
+                            <div class="h-full w-full rounded-full bg-violet/70"></div>
+                          }
+                        </div>
                       </div>
                     </div>
-                    <!-- GPU -->
-                    <div>
-                      <div class="flex justify-between mb-1">
-                        <span class="text-[10px] text-ink3">GPU</span>
-                        <span class="mono text-[10px] text-ink">
-                          {{ deploymentMetrics[d.id]?.gpu ? (deploymentMetrics[d.id].gpu + '×') : '—' }}
-                        </span>
-                      </div>
-                      <div class="h-1 rounded-full bg-white/5 overflow-hidden">
-                        @if (deploymentMetrics[d.id]?.gpu) {
-                          <div class="h-full w-full rounded-full bg-violet/70"></div>
-                        }
-                      </div>
+                  } @else {
+                    <div class="ml-[92px] flex items-center gap-2 text-[11px] text-ink3">
+                      <app-icon name="help" className="w-3 h-3 text-ink3"></app-icon>
+                      <span>Live metrics require an active Kubernetes cluster — not available in local Docker mode.</span>
                     </div>
-                  </div>
+                  }
                 </div>
               }
               @if (liveRuns.length === 0 && activeDeployments.length === 0 && !runsLoading && !deploymentsLoading) {
@@ -246,48 +262,53 @@ interface ClusterSeries {
             </div>
           </app-card>
 
-          <!-- Cluster utilization -->
-          <app-card title="Cluster utilization · last 60 min" [dense]="true">
-            <div right class="flex items-center gap-3 text-[11px] text-ink3">
-              <span class="inline-flex items-center gap-1.5"><span class="w-2 h-2 rounded-sm" style="background:#42C2FF"></span>CPU</span>
-              <span class="inline-flex items-center gap-1.5"><span class="w-2 h-2 rounded-sm" style="background:#85F4FF"></span>GPU</span>
-              <span class="inline-flex items-center gap-1.5"><span class="w-2 h-2 rounded-sm" style="background:#B8FFF9"></span>Memory</span>
+          <!-- Cluster utilization (live, from metrics-server) -->
+          <app-card title="Cluster utilization · live" [dense]="true">
+            <div right class="flex items-center gap-2 text-[11px] text-ink3">
+              @if (clusterReachable) {
+                <app-icon name="refresh" className="w-3 h-3"></app-icon>
+                <span>{{ clusterMetrics?.node_count ?? '—' }} node{{ (clusterMetrics?.node_count ?? 0) === 1 ? '' : 's' }} · refresh 5s</span>
+              } @else {
+                <span class="text-ink3">Local-dev mode</span>
+              }
             </div>
-            <div class="p-3">
-              <div class="relative">
-                <svg width="100%" [attr.viewBox]="'0 0 760 140'" preserveAspectRatio="none" class="block h-[160px]">
-                  <defs>
-                    <linearGradient id="gcpu" x1="0" x2="0" y1="0" y2="1">
-                      <stop offset="0%" stop-color="#42C2FF" stop-opacity="0.22"/>
-                      <stop offset="100%" stop-color="#42C2FF" stop-opacity="0"/>
-                    </linearGradient>
-                    <pattern id="grid" width="95" height="35" patternUnits="userSpaceOnUse">
-                      <path d="M 95 0 L 0 0 0 35" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>
-                    </pattern>
-                  </defs>
-                  <rect width="760" height="140" fill="url(#grid)"/>
-                  <path [attr.d]="cpuAreaPath" fill="url(#gcpu)"/>
-                  @for (s of clusterSeries; track $index) {
-                    <path [attr.d]="s.path" [attr.stroke]="s.color" stroke-width="1.25" fill="none" [attr.opacity]="s.opacity"/>
+            <div class="p-4">
+              @if (clusterReachable) {
+                <div class="grid grid-cols-4 gap-4">
+                  @for (u of utilStats; track u.label) {
+                    <div>
+                      <div class="flex items-center justify-between">
+                        <div class="text-[11px] text-ink3">{{ u.label }}</div>
+                        <div class="mono text-[13px] text-ink">{{ u.value }}</div>
+                      </div>
+                      <div class="mt-1.5 h-1.5 rounded-full bg-white/5 overflow-hidden">
+                        <div class="h-full transition-all duration-500" [style.width.%]="u.pct" [style.background]="u.color" [style.opacity]="0.85"></div>
+                      </div>
+                      <div class="mt-1 text-[10.5px] text-ink3">{{ u.sub }}</div>
+                    </div>
                   }
-                </svg>
-                <div class="absolute top-1 right-1 mono text-[10px] text-ink3">100%</div>
-                <div class="absolute bottom-1 right-1 mono text-[10px] text-ink3">0%</div>
-              </div>
-              <div class="grid grid-cols-4 gap-3 mt-3">
-                @for (u of utilStats; track u.label) {
-                  <div>
-                    <div class="flex items-center justify-between">
-                      <div class="text-[11px] text-ink3">{{ u.label }}</div>
-                      <div class="mono text-[12px]">{{ u.value }}</div>
-                    </div>
-                    <div class="mt-1 h-1 rounded-full bg-white/5 overflow-hidden">
-                      <div class="h-full" [style.width.%]="u.pct" [style.background]="u.color" [style.opacity]="0.85"></div>
-                    </div>
-                    <div class="mt-1 text-[10.5px] text-ink3">{{ u.sub }}</div>
+                </div>
+              } @else {
+                <div class="flex items-start gap-3 px-2 py-3">
+                  <div class="w-8 h-8 rounded-lg bg-cyan3/10 border border-cyan3/30 flex items-center justify-center shrink-0">
+                    <app-icon name="help" className="w-4 h-4 text-cyan3"></app-icon>
                   </div>
-                }
-              </div>
+                  <div class="flex-1">
+                    <div class="text-[13px] font-medium text-ink mb-0.5">No Kubernetes cluster connected</div>
+                    <div class="text-[12px] text-ink3 leading-relaxed">
+                      Backend is running in Docker Compose mode without access to a cluster.
+                      Live CPU / Memory / GPU metrics require an AKS, KinD or minikube cluster
+                      with <span class="mono text-ink2">metrics-server</span> installed and the
+                      kubeconfig mounted at <span class="mono text-ink2">/root/.kube/config</span>.
+                    </div>
+                  </div>
+                  <div class="text-right shrink-0">
+                    <div class="text-[10.5px] text-ink3 uppercase tracking-wider">Queue</div>
+                    <div class="mono text-[18px] text-ink mt-0.5">{{ clusterMetrics?.queue_count ?? liveRuns.length }}</div>
+                    <div class="text-[10.5px] text-ink3 mt-0.5">active runs</div>
+                  </div>
+                </div>
+              }
             </div>
           </app-card>
         </div>
@@ -345,18 +366,44 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private projectService = inject(ProjectService);
   private pipelineService = inject(PipelineService);
   private deploymentService = inject(DeploymentService);
+  private experimentService = inject(ExperimentService);
+  private modelService = inject(ModelService);
+  private activityService = inject(ActivityService);
+  private clusterService = inject(ClusterService);
   private router = inject(Router);
   private subs: Subscription[] = [];
+
+  clusterMetrics: ClusterMetrics | null = null;
+  clusterReachable = false;
 
   projects: Project[] = [];
   activeProjects = 0;
   projectsTotal = 0;
-  projectsDelta = 2;
+  projectsDelta = 0;
 
-  projectsSpark = [3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 8];
-  expBars = [8, 12, 14, 9, 22, 18, 36];
-  modelsSpark = [30, 31, 31, 33, 34, 35, 36, 37, 37, 38, 38, 39];
-  deploySpark = [1180, 1210, 1240, 1190, 1400, 1520, 1480, 1600, 1580, 1620, 1700, 1760];
+  // Experiments KPI
+  allRuns: MlflowRunWithProject[] = [];
+  experimentsTotal = 0;
+  experimentsLast7 = 0;
+  experimentsTodayDelta = 0;
+
+  // Models KPI
+  allModels: GlobalModelEntry[] = [];
+  modelsTotal = 0;
+  modelsInProduction = 0;
+  modelsLast7Delta = 0;
+
+  // Deployments KPI breakdown (independent of activeDeployments which is the running list)
+  deploymentsTotal = 0;
+  deploymentsReady = 0;
+  deploymentsCreating = 0;
+  deploymentsFailed = 0;
+
+  // Sparklines — recomputed from real data; default to flat zeros until data arrives
+  projectsSpark: number[] = Array(7).fill(0);
+  expBars: number[] = Array(7).fill(0);
+  modelsSpark: number[] = Array(7).fill(0);
+  deploySpark: number[] = Array(7).fill(0);
 
   liveRuns: LiveRun[] = [];
   runsLoading = true;
@@ -371,16 +418,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     { label: 'Queue',  value: '3',   sub: 'avg wait 42s', pct: 30, color: '#42C2FF' },
   ];
 
-  activity: ActivityItem[] = [
-    { t: '2m',  who: 'firas.m', what: 'started run',     obj: 'd83bb58a',            ctx: 'red-wine / pipelines',     tone: 'info'  },
-    { t: '14m', who: 'firas.m', what: 'promoted model',  obj: 'wine-quality-gbm:v14', ctx: 'staging → production',    tone: 'ok'    },
-    { t: '22m', who: 'bot',     what: 'auto-registered', obj: 'exp_0240',            ctx: 'rf-baseline',              tone: 'muted' },
-    { t: '1h',  who: 'm.chen',  what: 'pushed',          obj: 'commit 4f3c',         ctx: 'defect-vision / code',     tone: 'info'  },
-    { t: '1h',  who: 'l.sousa', what: 'deployed',        obj: 'two-tower-recs:v4',   ctx: 'staging',                  tone: 'info'  },
-    { t: '2h',  who: 'bot',     what: 'alert — drift',   obj: 'churn-logistic',      ctx: 'PSI 0.31 on feature age',  tone: 'warn'  },
-    { t: '3h',  who: 'a.patel', what: 'created project', obj: 'demand-forecast',     ctx: '',                         tone: 'info'  },
-    { t: '5h',  who: 'firas.m', what: 'run failed',      obj: 'f019e8c2',            ctx: 'train_v3.ipynb · OOM',     tone: 'bad'   },
-  ];
+  activity: ActivityItem[] = [];
 
   quickActions: Array<{ icon: IconName; label: string; hint?: string; tone?: 'primary'; action: string; }> = [
     { icon: 'plus',   label: 'Create project',      hint: '⌘N', tone: 'primary', action: 'projects' },
@@ -390,23 +428,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
     { icon: 'rocket', label: 'Deploy a model',      action: 'deployments' },
   ];
 
-  clusterSeries: ClusterSeries[] = [];
-  cpuAreaPath = '';
-
-  /* rolling history buffers for the live chart */
-  private cpuHistory: number[] = [];
-  private gpuHistory: number[] = [];
-  private memHistory: number[] = [];
-  private cpuCur = 38; private gpuCur = 71; private memCur = 54;
+  // (Synthetic chart fields removed — replaced by real cluster fetch.)
 
   ngOnInit(): void {
-    this.projectService.list().subscribe({
-      next: (rows) => {
-        this.projects = rows || [];
-        this.projectsTotal = this.projects.length;
-        this.activeProjects = this.projects.length;
-      },
-    });
+    this.fetchProjects();
+    this.fetchExperiments();
+    this.fetchModels();
+    this.fetchActivity();
 
     this.initClusterHistory();
     this.buildClusterChart();
@@ -423,6 +451,160 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.tickCluster();
       })
     );
+
+    /* heavier refresh every 30s: experiments + models KPIs + activity feed */
+    this.subs.push(
+      interval(30000).subscribe(() => {
+        this.fetchExperiments();
+        this.fetchModels();
+        this.fetchActivity();
+      })
+    );
+  }
+
+  private fetchActivity(): void {
+    this.activityService.list(20).subscribe({
+      next: (entries) => {
+        this.activity = (entries || []).map(e => ({
+          t: this.timeAgoIso(e.t_iso),
+          who: e.who,
+          what: e.what,
+          obj: e.obj,
+          ctx: e.ctx,
+          tone: e.tone,
+        }));
+      },
+      error: () => { /* keep last known activity */ },
+    });
+  }
+
+  private timeAgoIso(iso: string): string {
+    if (!iso) return '';
+    const ms = Date.now() - +new Date(iso);
+    if (isNaN(ms) || ms < 0) return '';
+    const min = Math.floor(ms / 60000);
+    if (min < 1) return 'now';
+    if (min < 60) return `${min}m`;
+    const h = Math.floor(min / 60);
+    if (h < 24) return `${h}h`;
+    const d = Math.floor(h / 24);
+    return `${d}d`;
+  }
+
+  private fetchProjects(): void {
+    this.projectService.list().subscribe({
+      next: (rows) => {
+        this.projects = rows || [];
+        this.projectsTotal = this.projects.length;
+        this.activeProjects = this.projects.length;
+        this.computeProjectsKpi();
+      },
+    });
+  }
+
+  private fetchExperiments(): void {
+    this.experimentService.listAll().subscribe({
+      next: (res) => {
+        this.allRuns = res.runs || [];
+        this.computeExperimentsKpi();
+      },
+      error: () => { /* keep last known values */ },
+    });
+  }
+
+  private fetchModels(): void {
+    this.modelService.listAll().subscribe({
+      next: (res) => {
+        this.allModels = res.models || [];
+        this.computeModelsKpi();
+      },
+      error: () => { /* keep last known values */ },
+    });
+  }
+
+  /** Bucket a list of epoch-millisecond timestamps by day, oldest → newest. */
+  private bucketByDay(timestampsMs: number[], days = 7): number[] {
+    const now = Date.now();
+    const buckets = Array(days).fill(0);
+    for (const t of timestampsMs) {
+      const ageDays = Math.floor((now - t) / 86400000);
+      if (ageDays >= 0 && ageDays < days) {
+        buckets[days - 1 - ageDays]++;
+      }
+    }
+    return buckets;
+  }
+
+  /** Cumulative count by day — useful for "growth" sparklines. */
+  private cumulativeByDay(timestampsMs: number[], days = 7): number[] {
+    const buckets = this.bucketByDay(timestampsMs, days);
+    let total = 0;
+    return buckets.map(c => (total += c));
+  }
+
+  private computeProjectsKpi(): void {
+    const created = this.projects
+      .map(p => +new Date((p as any).created_at))
+      .filter(t => !isNaN(t));
+    this.projectsSpark = this.cumulativeByDay(created, 12);
+    // Delta = projects created in last 7 days
+    const cutoff = Date.now() - 7 * 86400000;
+    this.projectsDelta = created.filter(t => t >= cutoff).length;
+  }
+
+  private computeExperimentsKpi(): void {
+    const starts = this.allRuns
+      .map(r => Number(r.info?.start_time))
+      .filter(t => Number.isFinite(t) && t > 0);
+    this.experimentsTotal = starts.length;
+    const today = Date.now() - 86400000;
+    const last7 = Date.now() - 7 * 86400000;
+    this.experimentsLast7 = starts.filter(t => t >= last7).length;
+    this.experimentsTodayDelta = starts.filter(t => t >= today).length;
+    // Sparkline: if there was activity this week, show daily bars over 7 days.
+    // Otherwise widen the lens to weekly bars over 12 weeks so old data still shows.
+    if (this.experimentsLast7 > 0) {
+      this.expBars = this.bucketByDay(starts, 7);
+    } else {
+      this.expBars = this.bucketByWeek(starts, 12);
+    }
+  }
+
+  /** Bucket epoch-ms timestamps by week, oldest -> newest. */
+  private bucketByWeek(timestampsMs: number[], weeks = 12): number[] {
+    const now = Date.now();
+    const buckets = Array(weeks).fill(0);
+    const weekMs = 7 * 86400000;
+    for (const t of timestampsMs) {
+      const ageWeeks = Math.floor((now - t) / weekMs);
+      if (ageWeeks >= 0 && ageWeeks < weeks) {
+        buckets[weeks - 1 - ageWeeks]++;
+      }
+    }
+    return buckets;
+  }
+
+  private computeModelsKpi(): void {
+    const allVersions: ModelVersion[] = this.allModels.flatMap(m => m.versions || []);
+    this.modelsTotal = allVersions.length;
+    this.modelsInProduction = allVersions.filter(v => v.stage === 'Production').length;
+    const stamps = allVersions
+      .map(v => Number(v.creation_timestamp))
+      .filter(t => Number.isFinite(t) && t > 0);
+    const last7 = Date.now() - 7 * 86400000;
+    this.modelsLast7Delta = stamps.filter(t => t >= last7).length;
+    this.modelsSpark = this.cumulativeByDay(stamps, 12);
+  }
+
+  private computeDeploymentsKpi(): void {
+    this.deploymentsTotal = this.activeDeployments.length;
+    this.deploymentsReady = this.activeDeployments.filter(d => d.status === 'READY').length;
+    this.deploymentsCreating = this.activeDeployments.filter(d => d.status === 'CREATING').length;
+    this.deploymentsFailed = this.activeDeployments.filter(d => d.status === 'FAILED').length;
+    const stamps = this.activeDeployments
+      .map(d => +new Date(d.created_at || ''))
+      .filter(t => !isNaN(t));
+    this.deploySpark = this.cumulativeByDay(stamps, 12);
   }
 
   ngOnDestroy(): void {
@@ -434,6 +616,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       next: ({ deployments }) => {
         this.deploymentsLoading = false;
         this.activeDeployments = deployments;
+        this.computeDeploymentsKpi();
         deployments.forEach(d => this.fetchMetrics(d.id));
       },
       error: () => { this.deploymentsLoading = false; },
@@ -517,48 +700,51 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return { info: 'text-ink', ok: 'text-good', warn: 'text-warn', bad: 'text-bad', muted: 'text-ink3' }[tone];
   }
 
+  /** Initial cluster fetch — gives us non-empty utilStats as soon as the page loads. */
   private initClusterHistory(): void {
-    const n = 60;
-    const mk = (seed: number) => { let x = seed; return () => { x = (x * 9301 + 49297) % 233280; return x / 233280; }; };
-    const r1 = mk(11), r2 = mk(22), r3 = mk(33);
-    let a = 38, b = 71, c = 54;
-    for (let i = 0; i < n; i++) {
-      a = Math.max(10, Math.min(80, a + (r1() - 0.5) * 6));
-      b = Math.max(30, Math.min(98, b + (r2() - 0.5) * 5));
-      c = Math.max(30, Math.min(75, c + (r3() - 0.5) * 3));
-      this.cpuHistory.push(a); this.gpuHistory.push(b); this.memHistory.push(c);
-    }
-    this.cpuCur = a; this.gpuCur = b; this.memCur = c;
+    this.fetchClusterMetrics();
   }
 
+  /** Pulled by ngOnInit before fetchClusterMetrics returns. Kept as a no-op
+      so the existing template doesn't break. */
+  private buildClusterChart(): void { /* noop — real chart removed */ }
+
+  /** Renamed from the old synthetic ticker. Now just refreshes from backend. */
   private tickCluster(): void {
-    this.cpuCur = Math.max(10, Math.min(80, this.cpuCur + (Math.random() - 0.5) * 6));
-    this.gpuCur = Math.max(30, Math.min(98, this.gpuCur + (Math.random() - 0.5) * 5));
-    this.memCur = Math.max(30, Math.min(75, this.memCur + (Math.random() - 0.5) * 3));
-    this.cpuHistory = [...this.cpuHistory.slice(1), this.cpuCur];
-    this.gpuHistory = [...this.gpuHistory.slice(1), this.gpuCur];
-    this.memHistory = [...this.memHistory.slice(1), this.memCur];
-    this.utilStats = [
-      { label: 'CPU avg', value: `${Math.round(this.cpuCur)}%`, sub: `peak ${Math.round(Math.max(...this.cpuHistory.slice(-10)))}%`, pct: this.cpuCur, color: '#42C2FF' },
-      { label: 'GPU avg', value: `${Math.round(this.gpuCur)}%`, sub: `peak ${Math.round(Math.max(...this.gpuHistory.slice(-10)))}%`, pct: this.gpuCur, color: '#85F4FF' },
-      { label: 'Memory',  value: `${Math.round(this.memCur)}%`, sub: `peak ${Math.round(Math.max(...this.memHistory.slice(-10)))}%`, pct: this.memCur, color: '#B8FFF9' },
-      { label: 'Queue',   value: `${this.liveRuns.length}`, sub: 'active runs', pct: Math.min(this.liveRuns.length * 10, 100), color: '#42C2FF' },
-    ];
-    this.buildClusterChart();
+    this.fetchClusterMetrics();
   }
 
-  private buildClusterChart(): void {
-    const w = 760, h = 140;
-    const lineFor = (data: number[]) => {
-      const step = w / (data.length - 1);
-      return data.map((v, i) => `${i === 0 ? 'M' : 'L'}${(i * step).toFixed(1)},${(h - (v / 100) * (h - 8) - 4).toFixed(1)}`).join(' ');
-    };
-    const cpuPath = lineFor(this.cpuHistory);
-    this.cpuAreaPath = `${cpuPath} L${w},${h} L0,${h} Z`;
-    this.clusterSeries = [
-      { path: cpuPath,                       color: '#42C2FF', opacity: 1    },
-      { path: lineFor(this.gpuHistory),      color: '#85F4FF', opacity: 0.85 },
-      { path: lineFor(this.memHistory),      color: '#B8FFF9', opacity: 0.85 },
-    ];
+  private fetchClusterMetrics(): void {
+    this.clusterService.metrics().subscribe({
+      next: (m) => {
+        this.clusterMetrics = m;
+        // Treat as "reachable" only if metrics-server actually returned numbers.
+        this.clusterReachable = m.cpu_pct != null || m.memory_pct != null;
+        const cpu = m.cpu_pct ?? 0;
+        const mem = m.memory_pct ?? 0;
+        const gpu = m.gpu_pct;
+        const cpuSub = m.cpu_used_cores != null
+          ? `${m.cpu_used_cores} / ${m.cpu_total_cores} cores`
+          : 'metrics-server unreachable';
+        const memSub = m.memory_used_gi != null
+          ? `${m.memory_used_gi} / ${m.memory_total_gi} Gi`
+          : 'metrics-server unreachable';
+        const gpuSub = m.gpu_total > 0
+          ? `${m.gpu_total} GPU${m.gpu_total === 1 ? '' : 's'} available`
+          : 'no GPU on cluster';
+        this.utilStats = [
+          { label: 'CPU',    value: m.cpu_pct != null ? `${m.cpu_pct}%` : '—',     sub: cpuSub, pct: cpu, color: '#42C2FF' },
+          { label: 'Memory', value: m.memory_pct != null ? `${m.memory_pct}%` : '—', sub: memSub, pct: mem, color: '#B8FFF9' },
+          { label: 'GPU',    value: gpu != null ? `${gpu}%` : '—',                 sub: gpuSub, pct: gpu ?? 0, color: '#85F4FF' },
+          { label: 'Queue',  value: `${m.queue_count}`, sub: 'active runs', pct: Math.min(m.queue_count * 10, 100), color: '#42C2FF' },
+        ];
+      },
+      error: () => {
+        // Backend either has no kubeconfig, or k8s API is unreachable.
+        // Show the friendly "no cluster" empty state instead of fake bars.
+        this.clusterReachable = false;
+        this.clusterMetrics = null;
+      },
+    });
   }
 }

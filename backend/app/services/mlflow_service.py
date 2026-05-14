@@ -117,8 +117,11 @@ async def delete_run(run_id: str) -> None:
 
 
 async def delete_model_version(name: str, version: str) -> None:
+    # MLflow 2.x requires HTTP DELETE on /model-versions/delete (POST → 405).
+    # httpx.delete() doesn't accept a JSON body directly, so use request().
     async with httpx.AsyncClient() as client:
-        resp = await client.post(
+        resp = await client.request(
+            "DELETE",
             f"{MLFLOW_URL}/api/2.0/mlflow/model-versions/delete",
             json={"name": name, "version": version},
         )
@@ -126,8 +129,10 @@ async def delete_model_version(name: str, version: str) -> None:
 
 
 async def delete_registered_model(name: str) -> None:
+    # MLflow 2.x requires HTTP DELETE on /registered-models/delete.
     async with httpx.AsyncClient() as client:
-        resp = await client.post(
+        resp = await client.request(
+            "DELETE",
             f"{MLFLOW_URL}/api/2.0/mlflow/registered-models/delete",
             json={"name": name},
         )

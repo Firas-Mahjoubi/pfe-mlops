@@ -522,7 +522,7 @@ def _build_custom_code_pipeline(
 
     @dsl.pipeline(name="custom-code-pipeline")
     def pipeline():
-        run_custom_code(
+        task = run_custom_code(
             code_minio_path=code_minio_path,
             dataset_minio_path=dataset_minio_path,
             entry_script=entry_script,
@@ -532,6 +532,11 @@ def _build_custom_code_pipeline(
             mlflow_tracking_uri=mlflow_tracking_uri,
             mlflow_experiment_id=mlflow_experiment_id,
         )
+        # Every user-triggered "Run code" click must actually train. KFP's
+        # per-step caching would otherwise return a cached result when the user
+        # re-submits with identical inputs (same zip, csv, experiment_id) —
+        # silently skipping the training container and registering no new model.
+        task.set_caching_options(enable_caching=False)
 
     return pipeline
 
@@ -577,6 +582,10 @@ async def trigger_custom_code_pipeline(
         experiment_name=project.name,
         run_name=f"{project.name}-custom-{code_name}-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}",
         namespace=settings.KFP_NAMESPACE,
+        # Belt + braces: also override at submission so this run never reuses a
+        # cached result even if the pipeline YAML is regenerated without the
+        # task-level setting for some reason.
+        enable_caching=False,
     )
 
     pipeline_run = PipelineRun(
@@ -615,12 +624,14 @@ async def get_pipeline_run_logs(run_id: str, db: AsyncSession) -> dict | None:
         }
 
     try:
+        from app.services.k8s_client import ensure_k8s_loaded
         from kubernetes import client as k8s_client
-        from kubernetes import config as k8s_config
 
-        k8s_config.load_kube_config(config_file=settings.KUBECONFIG)
-        v1 = k8s_client.CoreV1Api()
-        custom_api = k8s_client.CustomObjectsApi()
+        ensure_k8s_loaded()
+        cfg = k8s_client.Configuration.get_default_copy()
+        api_client = k8s_client.ApiClient(configuration=cfg)
+        v1 = k8s_client.CoreV1Api(api_client=api_client)
+        custom_api = k8s_client.CustomObjectsApi(api_client=api_client)
 
         kfp_run_id = pipeline_run.kfp_run_id
 

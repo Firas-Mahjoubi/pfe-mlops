@@ -69,7 +69,8 @@ Use the existing **`RG-FirasMahjoubi`** in **North Europe**. Don't create a new 
    - Kubernetes version: leave default
 3. **Node pools tab:**
    - Click on the existing `agentpool` → **"Update"**
-   - Node size: change to **`Standard_B4ms`** (4 vCPU, 16 GB) — search "B4ms" and pick it
+   - Node size: change to **`Standard_B4s_v2`** (4 vCPU, 16 GB) — search "B4s_v2" and pick it.
+     ⚠️ The older `Standard_B4ms` was retired in this subscription; the v2 series replaces it.
    - Scale method: **Manual**
    - Node count: **1**
    - Save

@@ -1,0 +1,151 @@
+name: Build and deploy to AKS
+
+# WHEN this runs:
+#   - every push to main → real deploy (auto)
+#   - manual button in the GitHub UI → useful for retrying / re-deploying a tag
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# WHERE we deploy (all from constants, never hard-coded in steps below).
+env:
+  ACR_NAME: acrmlopspfedemo
+  ACR_LOGIN_SERVER: acrmlopspfedemo.azurecr.io
+  RESOURCE_GROUP: RG-FirasMahjoubi
+  AKS_CLUSTER: aks-mlops-pfe
+  HELM_RELEASE: mlops
+  HELM_NAMESPACE: mlops
+
+# Default permission set for the GITHUB_TOKEN. We don't currently need write
+# access to anything — the deploy uses our own Azure credentials, not the token.
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Concurrency: cancel any in-progress run for the same workflow so a quick
+    # second push doesn't deploy an older image after a newer one. The cluster
+    # always converges on the latest commit on main.
+    concurrency:
+      group: deploy-main
+      cancel-in-progress: true
+
+    steps:
+      # ────────────────────────────────────────────────────────────────────
+      # 1. Pull the repo so we have the Dockerfiles + Helm chart on the runner
+      # ────────────────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ────────────────────────────────────────────────────────────────────
+      # 2. Login to Azure Container Registry so we can docker push.
+      #    The ACR admin user creds live in GitHub repo secrets.
+      # ────────────────────────────────────────────────────────────────────
+      - name: ACR docker login
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.ACR_LOGIN_SERVER }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      # ────────────────────────────────────────────────────────────────────
+      # 3. Build & push BACKEND image
+      #    Tagged with the git SHA (immutable) and :latest (convenience).
+      # ────────────────────────────────────────────────────────────────────
+      - name: Build & push backend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile.prod
+          push: true
+          tags: |
+            ${{ env.ACR_LOGIN_SERVER }}/backend:${{ github.sha }}
+            ${{ env.ACR_LOGIN_SERVER }}/backend:latest
+          # Layer cache between runs — saves 2-3 min on subsequent builds
+          # by reusing unchanged Docker layers (pip install, base image, etc.).
+          cache-from: type=registry,ref=${{ env.ACR_LOGIN_SERVER }}/backend:buildcache
+          cache-to: type=registry,ref=${{ env.ACR_LOGIN_SERVER }}/backend:buildcache,mode=max
+
+      # ────────────────────────────────────────────────────────────────────
+      # 4. Build & push FRONTEND image (same pattern as backend)
+      # ────────────────────────────────────────────────────────────────────
+      - name: Build & push frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile.prod
+          push: true
+          tags: |
+            ${{ env.ACR_LOGIN_SERVER }}/frontend:${{ github.sha }}
+            ${{ env.ACR_LOGIN_SERVER }}/frontend:latest
+          cache-from: type=registry,ref=${{ env.ACR_LOGIN_SERVER }}/frontend:buildcache
+          cache-to: type=registry,ref=${{ env.ACR_LOGIN_SERVER }}/frontend:buildcache,mode=max
+
+      # ────────────────────────────────────────────────────────────────────
+      # 5. Set up kubectl using the AKS admin kubeconfig from a GitHub secret.
+      #    We use this approach (instead of azure/login + aks-set-context)
+      #    because the user's scoped Contributor role can't create the role
+      #    assignments required by a service principal. The admin kubeconfig
+      #    uses certificate auth — no Azure AD tokens to refresh, no SP
+      #    creation needed, and it works as long as the cluster exists.
+      #
+      #    Generate the secret value on a workstation that has access to
+      #    the cluster:
+      #      az aks get-credentials -g RG-FirasMahjoubi -n aks-mlops-pfe --admin --file kc
+      #      [Convert]::ToBase64String([IO.File]::ReadAllBytes("kc"))   # PowerShell
+      #      base64 -w0 kc                                              # bash
+      #    Save the resulting string in repo secret KUBE_CONFIG.
+      # ────────────────────────────────────────────────────────────────────
+      - name: Set up kubectl + KUBECONFIG
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+          kubectl version --client
+          kubectl cluster-info
+
+      # ────────────────────────────────────────────────────────────────────
+      # 6. Install Helm on the runner.
+      # ────────────────────────────────────────────────────────────────────
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.16.0
+
+      # ────────────────────────────────────────────────────────────────────
+      # 8. helm upgrade --install
+      #    The chart pulls image.tag and image.registry from values.yaml by
+      #    default; we override image.tag to the current git SHA so this run
+      #    deploys the freshly-pushed images.
+      #
+      #    --wait makes the action FAIL if pods don't reach Ready, so a
+      #    broken deploy shows up as a red build (instead of silently leaving
+      #    half-rolled-out pods).
+      # ────────────────────────────────────────────────────────────────────
+      - name: Helm upgrade
+        run: |
+          helm upgrade --install ${{ env.HELM_RELEASE }} \
+            ./infrastructure/helm/mlops \
+            --namespace ${{ env.HELM_NAMESPACE }} \
+            --set image.tag=${{ github.sha }} \
+            --wait --timeout 8m
+
+      # ────────────────────────────────────────────────────────────────────
+      # 9. Quick post-deploy sanity check — show what's actually running.
+      #    Useful for the GH Actions log: anyone reviewing a deploy can see
+      #    pod states + image tags without opening a kubectl shell.
+      # ────────────────────────────────────────────────────────────────────
+      - name: Post-deploy status
+        if: always()
+        run: |
+          echo "::group::Pods"
+          kubectl get pods -n ${{ env.HELM_NAMESPACE }} -o wide
+          echo "::endgroup::"
+          echo "::group::Images in use"
+          kubectl get pods -n ${{ env.HELM_NAMESPACE }} -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.containers[*].image}{"\n"}{end}'
+          echo "::endgroup::"
+          echo "::group::Helm release history"
+          helm history ${{ env.HELM_RELEASE }} -n ${{ env.HELM_NAMESPACE }} || true
+          echo "::endgroup::"

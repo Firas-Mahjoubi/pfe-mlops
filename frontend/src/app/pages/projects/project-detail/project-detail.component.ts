@@ -19,6 +19,7 @@ import { IconComponent } from '../../../shared/ui/icon/icon.component';
 import { BtnComponent } from '../../../shared/ui/btn/btn.component';
 import { StatusComponent } from '../../../shared/ui/status/status.component';
 import { ConfirmDialogComponent } from '../../../shared/ui/confirm-dialog/confirm-dialog.component';
+import { environment } from '../../../../environments/environment';
 
 type LogLevel = 'platform' | 'info' | 'warn' | 'error' | 'success' | 'banner' | 'blank';
 
@@ -724,8 +725,8 @@ interface LogLine {
                       <!-- Inline log terminal -->
                       @if (selectedLogRunId === run.id) {
                         <tr>
-                          <td colspan="6" class="p-0">
-                            <div class="border-t border-line bg-bg">
+                          <td colspan="6" class="p-0 max-w-0">
+                            <div class="border-t border-line bg-bg min-w-0 overflow-hidden">
                               <!-- Terminal header -->
                               <div class="flex items-center justify-between gap-4 px-4 h-10 border-b border-line bg-card">
                                 <div class="flex items-center gap-4 min-w-0">
@@ -804,7 +805,7 @@ interface LogLine {
                               <!-- Log output -->
                               <div class="relative">
                                 <div
-                                  class="h-80 overflow-y-auto px-0 py-1 font-mono text-[11.5px] leading-[1.55]"
+                                  class="h-80 overflow-y-auto overflow-x-hidden px-0 py-1 font-mono text-[11.5px] leading-[1.55]"
                                   #logContainer
                                   (scroll)="onLogScroll()"
                                 >
@@ -1065,9 +1066,13 @@ interface LogLine {
                                 Deploy
                               }
                             </button>
-                            <!-- Delete version -->
-                            <button (click)="promptDeleteModelVersion(v.name, v.version)"
-                              class="inline-flex items-center justify-center ml-1 w-7 h-7 text-slate-500 hover:text-red-400 rounded transition">
+                            <!-- Delete version (disabled when an active deployment references this version) -->
+                            <button (click)="promptDeleteModelVersion(v.name, v.version, v.stage)"
+                              [disabled]="isDeployed(v)"
+                              [title]="isDeployed(v) ? 'Delete the active deployment first' : 'Delete this model version'"
+                              class="inline-flex items-center justify-center ml-1 w-7 h-7 text-ink3 hover:text-bad
+                                     disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-ink3
+                                     rounded transition">
                               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                               </svg>
@@ -1234,7 +1239,7 @@ interface LogLine {
                       @if (d.endpoint_url) {
                         <div class="px-5 py-3 border-b border-line flex items-center gap-3">
                           <div class="text-[10.5px] font-semibold tracking-[0.07em] uppercase text-ink3 shrink-0">API Endpoint</div>
-                          <div class="flex-1 min-w-0 mono text-[12px] text-cyan3 truncate">{{ d.endpoint_url }}/v1/models/{{ d.inference_service_name }}:predict</div>
+                          <div class="flex-1 min-w-0 mono text-[12px] text-cyan3 truncate">POST {{ predictEndpoint(d) }}</div>
                           <button (click)="copyEndpoint(d)"
                             class="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium rounded-lg border transition shrink-0"
                             [class]="copiedEndpointId === d.id ? 'bg-good/10 border-good/30 text-good' : 'bg-white/[0.03] border-line text-ink2 hover:border-white/20'">
@@ -1498,7 +1503,7 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
   // Log terminal state (enhanced)
   logFilter: 'all' | 'platform' | 'error' = 'all';
   logSearch = '';
-  logWrap = false;
+  logWrap = true;
   logShowTs = true;
   logAutoScroll = true;
   logsCopied = false;
@@ -2407,17 +2412,22 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
     });
   }
 
+  predictEndpoint(d: Deployment): string {
+    // Public-callable URL: backend proxy. (KServe's status.url uses *.example.com,
+    // a cluster-internal placeholder that doesn't resolve from outside.)
+    return `${environment.apiBaseUrl}/deployments/${d.id}/predict`;
+  }
+
   copyEndpoint(d: Deployment): void {
-    const url = `${d.endpoint_url}/v1/models/${d.inference_service_name}:predict`;
-    navigator.clipboard.writeText(url).then(() => {
+    navigator.clipboard.writeText(this.predictEndpoint(d)).then(() => {
       this.copiedEndpointId = d.id;
       setTimeout(() => { this.copiedEndpointId = ''; }, 2000);
     });
   }
 
   curlSnippet(d: Deployment): string {
-    const url = `${d.endpoint_url}/v1/models/${d.inference_service_name}:predict`;
-    return `curl -X POST "${url}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"instances": [[5.1, 3.5, 1.4, 0.2]]}'`;
+    const url = this.predictEndpoint(d);
+    return `# Get a JWT token first:\n#   curl -X POST ${environment.apiBaseUrl}/auth/login \\\n#     -H "Content-Type: application/json" \\\n#     -d '{"email":"<your-email>","password":"<your-password>"}'\n# Then call predict with the access_token:\ncurl -X POST "${url}" \\\n  -H "Authorization: Bearer <ACCESS_TOKEN>" \\\n  -H "Content-Type: application/json" \\\n  -d '{"instances": [[13.54, 14.36, 87.46, 566.3, 0.09779, 0.08129, 0.06664, 0.04781, 0.1885, 0.05766, 0.2699, 0.7886, 2.058, 23.56, 0.008462, 0.0146, 0.02387, 0.01315, 0.0198, 0.0023, 15.11, 19.26, 99.7, 711.2, 0.144, 0.1773, 0.239, 0.1288, 0.2977, 0.07259]]}'`;
   }
 
   isWebhookError(msg: string): boolean {
@@ -2477,8 +2487,12 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
     this.openConfirm('Delete run', `Delete pipeline run ${runId.substring(0, 8)}?`, 'Delete', () => this.doDeletePipelineRun(runId));
   }
 
-  promptDeleteModelVersion(name: string, version: string): void {
-    this.openConfirm('Delete version', `Delete ${name} v${version}?`, 'Delete', () => this.doDeleteModelVersion(name, version));
+  promptDeleteModelVersion(name: string, version: string, stage?: string): void {
+    const isProd = stage === 'Production';
+    const msg = isProd
+      ? `${name} v${version} is in PRODUCTION. Delete anyway? This is irreversible.`
+      : `Delete ${name} v${version}? This cannot be undone.`;
+    this.openConfirm('Delete version', msg, 'Delete', () => this.doDeleteModelVersion(name, version));
   }
 
   doDeleteFile(filePath: string): void {
@@ -2503,8 +2517,17 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
   }
 
   doDeleteModelVersion(modelName: string, version: string): void {
+    this.promoteError = '';
     this.modelService.deleteVersion(modelName, version).subscribe({
-      next: () => this.loadModels(),
+      next: () => {
+        this.loadModels();
+        this.promoteMessage = `Deleted ${modelName} v${version}`;
+        setTimeout(() => { this.promoteMessage = ''; }, 4000);
+      },
+      error: (err) => {
+        const detail = err?.error?.detail || err?.message || 'Delete failed';
+        this.promoteError = `Could not delete v${version}: ${detail}`;
+      },
     });
   }
 

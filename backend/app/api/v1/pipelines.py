@@ -185,10 +185,15 @@ async def list_running_runs(
         # --- pod resource metrics --------------------------------------------
         pods_info = []
         try:
-            from kubernetes import client as k8s_client, config as k8s_config
-            k8s_config.load_kube_config(config_file=settings.KUBECONFIG)
-            v1 = k8s_client.CoreV1Api()
-            custom_api = k8s_client.CustomObjectsApi()
+            from app.services.k8s_client import ensure_k8s_loaded
+            from kubernetes import client as k8s_client
+            ensure_k8s_loaded()
+            # Fresh Configuration copy so the rewritten host (host.docker.internal)
+            # is guaranteed to be used even after the singleton was reset.
+            cfg = k8s_client.Configuration.get_default_copy()
+            api_client = k8s_client.ApiClient(configuration=cfg)
+            v1 = k8s_client.CoreV1Api(api_client=api_client)
+            custom_api = k8s_client.CustomObjectsApi(api_client=api_client)
 
             # Find pods for this KFP run
             pods = v1.list_namespaced_pod(

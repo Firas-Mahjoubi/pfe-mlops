@@ -16,31 +16,54 @@ KSERVE_GROUP = "serving.kserve.io"
 KSERVE_VERSION = "v1beta1"
 KSERVE_PLURAL = "inferenceservices"
 
+# Without explicit resources, KServe's mutating webhook injects defaults that
+# are too large for single-node KinD clusters (2 Gi request per replica → pods
+# stuck Pending with "Insufficient memory"). The values below fit comfortably
+# on KinD and are still right-sized for AKS / on-prem since they don't cap
+# the limit aggressively.
+DEFAULT_PREDICTOR_RESOURCES = {
+    "requests": {"cpu": "100m", "memory": "512Mi"},
+    "limits":   {"cpu": "1",    "memory": "1Gi"},
+}
+
 
 def _load_k8s_config() -> None:
-    """Load kubeconfig. Respects KUBECONFIG env var via load_kube_config()."""
+    """Load kubeconfig via the shared bootstrap so the Docker host rewrite
+    (127.0.0.1 → host.docker.internal) is consistently applied across every
+    k8s-touching code path."""
+    from app.services.k8s_client import ensure_k8s_loaded
     try:
-        config.load_kube_config(config_file=settings.KUBECONFIG)
+        ensure_k8s_loaded()
     except Exception as e:
         raise RuntimeError(
-            f"Cannot load kubeconfig ({settings.KUBECONFIG}): {e}. "
+            f"Cannot load kubeconfig: {e}. "
             "Make sure Kubernetes is running and KUBECONFIG is set correctly."
         ) from e
 
 
 def _custom_api() -> client.CustomObjectsApi:
     _load_k8s_config()
-    return client.CustomObjectsApi()
+    # Build the client from a fresh copy of the (rewritten) default Configuration
+    # so we get host.docker.internal even if another caller reset the singleton.
+    cfg = client.Configuration.get_default_copy()
+    return client.CustomObjectsApi(api_client=client.ApiClient(configuration=cfg))
 
 
 def build_inference_service_spec(
-    name: str, storage_uri: str, replicas: int = 1
+    name: str,
+    storage_uri: str,
+    replicas: int = 1,
+    resources: dict | None = None,
 ) -> dict:
     """Build an InferenceService manifest for an MLflow-produced sklearn model.
 
     storage_uri should point at the MLflow model artifact folder (the one
     containing MLmodel and model.pkl), e.g.
     s3://mlflow-artifacts/3/<run-id>/artifacts/model
+
+    resources: optional dict with `requests` / `limits` keys (k8s ResourceRequirements
+    shape). Defaults to `DEFAULT_PREDICTOR_RESOURCES`, which is sized to fit a
+    single-node KinD cluster while still being adequate on AKS / on-prem.
     """
     return {
         "apiVersion": f"{KSERVE_GROUP}/{KSERVE_VERSION}",
@@ -55,6 +78,7 @@ def build_inference_service_spec(
                 "minReplicas": replicas,
                 "sklearn": {
                     "storageUri": storage_uri,
+                    "resources": resources or DEFAULT_PREDICTOR_RESOURCES,
                 },
             },
         },

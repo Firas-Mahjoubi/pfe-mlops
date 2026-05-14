@@ -85,7 +85,8 @@ services:
       KFP_NAMESPACE: kubeflow
       KFP_MLFLOW_URI: http://host.docker.internal:5000
       KFP_MINIO_ENDPOINT: host.docker.internal:9000
-      KUBECONFIG: /app/kubeconfig
+      # Mounts below put the user's kubeconfig at /root/.kube/config (read-only).
+      KUBECONFIG: /root/.kube/config
       KSERVE_NAMESPACE: mlops
       KSERVE_SERVICE_ACCOUNT: kserve-sa
     extra_hosts:
@@ -94,6 +95,9 @@ services:
       - "8000:8000"
     volumes:
       - ../../backend:/app
+      # Mount the host's kubeconfig so the backend can talk to AKS / KinD.
+      # Uses ${USERPROFILE} on Windows, ${HOME} on macOS/Linux. Read-only.
+      - ${USERPROFILE:-${HOME}}/.kube:/root/.kube:ro
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   frontend:

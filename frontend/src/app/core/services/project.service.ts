@@ -4,6 +4,14 @@ import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { Project, ProjectCreate } from '../models/project.model';
 
+export interface ProjectStats {
+  project_id: string;
+  runs: number;
+  experiments: number;
+  models: number;
+  deployments: number;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ProjectService {
   private http = inject(HttpClient);
@@ -11,6 +19,10 @@ export class ProjectService {
 
   list(): Observable<Project[]> {
     return this.http.get<Project[]>(this.apiUrl);
+  }
+
+  stats(): Observable<ProjectStats[]> {
+    return this.http.get<ProjectStats[]>(`${this.apiUrl}/stats`);
   }
 
   get(id: string): Observable<Project> {

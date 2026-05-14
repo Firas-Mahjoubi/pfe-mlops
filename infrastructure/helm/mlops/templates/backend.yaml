@@ -130,6 +130,14 @@ spec:
               value: {{ .Values.kfp.host | quote }}
             - name: KFP_NAMESPACE
               value: {{ .Values.kfp.namespace | quote }}
+            # Values embedded into KFP pipeline specs. Pipeline pods run in the
+            # `kubeflow` namespace, so they must reach our mlops services via
+            # cross-namespace DNS, not the Docker-Compose `host.docker.internal`
+            # defaults baked into pipeline_service.py.
+            - name: KFP_MLFLOW_URI
+              value: "http://mlflow.{{ .Release.Namespace }}.svc.cluster.local:5000"
+            - name: KFP_MINIO_ENDPOINT
+              value: "minio.{{ .Release.Namespace }}.svc.cluster.local:9000"
 
             # KServe
             - name: KSERVE_NAMESPACE

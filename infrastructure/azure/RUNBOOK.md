@@ -264,6 +264,15 @@ kubectl set image deployment/minio -n kubeflow minio=minio/minio:RELEASE.2019-08
 # After minio is up, restart ml-pipeline so it reconnects
 kubectl rollout status deployment/minio -n kubeflow --timeout=120s
 kubectl rollout restart deployment/ml-pipeline -n kubeflow
+
+# Fix the workflow-controller's --executor-image arg (same -license-compliance
+# tag was removed from gcr.io). Without this, every pipeline run gets stuck
+# with `Init:ImagePullBackOff` on the DAG driver pod, because Argo can't pull
+# the per-step executor (argoexec) sidecar. The upstream Argo image at the
+# same version works fine.
+kubectl patch deploy workflow-controller -n kubeflow --type=json -p \
+  '[{"op":"replace","path":"/spec/template/spec/containers/0/args","value":["--configmap","workflow-controller-configmap","--executor-image","quay.io/argoproj/argoexec:v3.4.17","--namespaced"]}]'
+kubectl rollout status deploy/workflow-controller -n kubeflow --timeout=120s
 ```
 
 ### 4.5 — Apply the mlops namespace + KServe SA

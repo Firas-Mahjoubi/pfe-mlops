@@ -12,8 +12,15 @@ imagePullSecret: acr-pull-secret
 namespace: mlops
 
 # ─── Ingress / DNS ──────────────────────────────────────────────────────────
+# Public hostname served via Cloudflare Tunnel. The in-cluster Ingress
+# resource is unused by the tunnel path (cloudflared targets the frontend
+# Service directly), but `host` still drives the backend's CORS_ORIGINS env
+# var. The Azure cloudapp.azure.com URL is left unreachable from the internet
+# because the INSOMEA NSG blocks 80/443 on the AKS node subnet -- we cannot
+# add an inbound rule (the NSG lives in the AKS-managed MC_* RG outside our
+# Contributor scope). See infrastructure/k8s/cloudflared/ for the tunnel.
 ingress:
-  host: mlops-pfe-demo.northeurope.cloudapp.azure.com
+  host: mlops.firasmahjoubi.app
   className: nginx
   tlsSecretName: mlops-tls
   clusterIssuer: letsencrypt-prod

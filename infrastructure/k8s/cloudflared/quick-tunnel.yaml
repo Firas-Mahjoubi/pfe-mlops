@@ -1,0 +1,45 @@
+# Phase 1 — Cloudflare Quick Tunnel (no account needed, random URL).
+#
+# What this does:
+#   The cloudflared Pod dials OUT to Cloudflare's edge over HTTPS/QUIC, gets
+#   assigned an ephemeral *.trycloudflare.com hostname, and forwards inbound
+#   requests from that hostname back through the tunnel to the in-cluster
+#   frontend Service. No inbound port is opened on the cluster; outbound is
+#   always allowed by the INSOMEA NSG.
+#
+# How to find the URL after applying:
+#   kubectl logs -n mlops -l app=cloudflared-quick --tail=30 | findstr trycloudflare
+#
+# Limitation:
+#   The URL changes every time the Pod restarts. For a stable URL use the
+#   Phase 2 named tunnel instead.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudflared-quick
+  namespace: mlops
+  labels:
+    app: cloudflared-quick
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cloudflared-quick
+  template:
+    metadata:
+      labels:
+        app: cloudflared-quick
+    spec:
+      containers:
+        - name: cloudflared
+          image: cloudflare/cloudflared:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - tunnel
+            - --no-autoupdate
+            - --url
+            - http://frontend.mlops.svc.cluster.local:80
+          resources:
+            requests: { cpu: 50m,  memory: 64Mi }
+            limits:   { cpu: 200m, memory: 128Mi }

@@ -1,0 +1,88 @@
+# Phase 2 — Cloudflare Named Tunnel (stable URL: mlops.firasmahjoubi.app)
+#
+# WHAT this does:
+#   Same outbound-tunnel architecture as quick-tunnel.yaml, but the tunnel is
+#   pre-registered in the Cloudflare dashboard. Cloudflare ties it to a stable
+#   public hostname (mlops.firasmahjoubi.app) instead of a random
+#   trycloudflare.com URL. Surviving pod restarts is automatic; the tunnel ID
+#   and credentials live server-side under the user's Cloudflare account.
+#
+# PREREQUISITES (one-time, ~10 min):
+#   1. Sign up at cloudflare.com (free) and add firasmahjoubi.app to your
+#      account. Cloudflare gives you two nameservers.
+#   2. Log into name.com → Domains → firasmahjoubi.app → Nameservers → update
+#      to the two Cloudflare nameservers from step 1.
+#   3. Wait 10-30 min for nameserver propagation (Cloudflare emails you when
+#      it sees the change).
+#   4. In Cloudflare dashboard: Zero Trust → Networks → Tunnels → "Create a
+#      tunnel" → cloudflared → name it `mlops-pfe` → click NEXT → copy the
+#      install token (a long base64 string). DO NOT paste it into chat.
+#
+# CREATE THE SECRET (you do this once, on your laptop):
+#   kubectl create secret generic cloudflared-token -n mlops `
+#     --from-literal=token='<paste-token-here>'
+#
+# CONFIGURE PUBLIC HOSTNAME (back in Cloudflare dashboard):
+#   Same tunnel → Public Hostname tab → Add a public hostname:
+#     Subdomain: mlops
+#     Domain:    firasmahjoubi.app
+#     Service:   Type=HTTP  URL=frontend.mlops.svc.cluster.local:80
+#   DNS record and TLS cert are created automatically.
+#
+# APPLY:
+#   kubectl apply -f infrastructure/k8s/cloudflared/named-tunnel.yaml
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudflared-named
+  namespace: mlops
+  labels:
+    app: cloudflared-named
+spec:
+  replicas: 2  # HA: if one Pod restarts, the other keeps the tunnel up.
+  selector:
+    matchLabels:
+      app: cloudflared-named
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: cloudflared-named
+    spec:
+      containers:
+        - name: cloudflared
+          image: cloudflare/cloudflared:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            # --metrics pins the metrics+probe server to a known port. Without
+            # this, cloudflared picks a random port and the livenessProbe below
+            # (which hits :2000/ready) always fails, sending the Pod into
+            # CrashLoopBackOff.
+            - tunnel
+            - --no-autoupdate
+            - --metrics
+            - 0.0.0.0:2000
+            - run
+            - --token
+            - $(TUNNEL_TOKEN)
+          env:
+            - name: TUNNEL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: cloudflared-token
+                  key: token
+          resources:
+            requests: { cpu: 50m,  memory: 64Mi }
+            limits:   { cpu: 200m, memory: 128Mi }
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: 2000
+            failureThreshold: 1
+            initialDelaySeconds: 10
+            periodSeconds: 10

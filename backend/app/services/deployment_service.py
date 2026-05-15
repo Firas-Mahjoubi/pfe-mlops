@@ -71,6 +71,14 @@ def build_inference_service_spec(
         "metadata": {
             "name": name,
             "namespace": settings.KSERVE_NAMESPACE,
+            # RawDeployment produces a plain K8s Deployment+Service+Ingress and
+            # works on any cluster. Serverless (the KServe default) needs a
+            # Knative-aware ingress (Istio or Kourier) — we install neither, so
+            # without this annotation routes never reconcile and Ready stays
+            # Unknown ("IngressNotConfigured") indefinitely.
+            "annotations": {
+                "serving.kserve.io/deploymentMode": "RawDeployment",
+            },
         },
         "spec": {
             "predictor": {

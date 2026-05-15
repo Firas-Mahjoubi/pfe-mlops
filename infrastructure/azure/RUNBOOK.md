@@ -246,6 +246,15 @@ kubectl apply -f https://github.com/kserve/kserve/releases/download/v0.13.1/kser
 # Fix the broken kube-rbac-proxy image (gcr.io/kubebuilder/kube-rbac-proxy was moved)
 kubectl set image deployment/kserve-controller-manager -n kserve \
   kube-rbac-proxy=quay.io/brancz/kube-rbac-proxy:v0.18.0
+
+# Switch KServe default to RawDeployment. KServe's "Serverless" default needs
+# a Knative-aware ingress (Istio or Kourier) which we don't install — without
+# this patch every InferenceService stays stuck on `IngressNotConfigured` and
+# never reaches Ready. RawDeployment produces a plain K8s Deployment + Service
+# + Ingress that works with our NGINX setup.
+kubectl patch cm inferenceservice-config -n kserve --type=merge \
+  -p '{"data":{"deploy":"{\"defaultDeploymentMode\":\"RawDeployment\"}"}}'
+kubectl rollout restart deployment/kserve-controller-manager -n kserve
 ```
 
 ### 4.4 — Install Kubeflow Pipelines

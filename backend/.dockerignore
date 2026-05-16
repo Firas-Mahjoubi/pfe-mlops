@@ -1,0 +1,29 @@
+# Local-dev kubeconfig pointing at a KinD cluster on host.docker.internal.
+# Must NEVER be baked into the prod image -- if in-cluster auth ever fails,
+# the loader would fall back to this file and hit a non-existent dev cluster.
+kubeconfig
+
+# Python build / dev cruft
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.mypy_cache
+.ruff_cache
+
+# Editor / OS
+.vscode
+.idea
+.DS_Store
+*.swp
+
+# Test/coverage artefacts
+.coverage
+htmlcov
+.tox
+
+# Local env files (might contain secrets)
+.env
+.env.local

@@ -36,6 +36,14 @@ rules:
   - apiGroups: ["metrics.k8s.io"]
     resources: ["nodes", "pods"]
     verbs: ["get", "list"]
+  # Inference proxying: the predict path forwards requests through the
+  # Kubernetes API server's services/proxy subresource. This is a separate
+  # RBAC verb from `services` itself (granting `services` does NOT cover
+  # `services/proxy`). `get` covers the readiness probe at GET /v1/models/X
+  # and `create` covers the predict POST.
+  - apiGroups: [""]
+    resources: ["services/proxy"]
+    verbs: ["get", "create"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

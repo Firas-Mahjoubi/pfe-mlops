@@ -18,7 +18,11 @@ export class ProjectService {
   private apiUrl = `${environment.apiBaseUrl}/projects`;
 
   list(): Observable<Project[]> {
-    return this.http.get<Project[]>(this.apiUrl);
+    // Trailing slash matters: FastAPI registers the collection route as `/`
+    // and 307-redirects `/projects` → `/projects/`. The redirect's Location
+    // header loses the original https scheme (TLS terminated at Cloudflare),
+    // and browsers refuse to follow an http:// redirect from an https:// page.
+    return this.http.get<Project[]>(`${this.apiUrl}/`);
   }
 
   stats(): Observable<ProjectStats[]> {
@@ -30,7 +34,7 @@ export class ProjectService {
   }
 
   create(data: ProjectCreate): Observable<Project> {
-    return this.http.post<Project>(this.apiUrl, data);
+    return this.http.post<Project>(`${this.apiUrl}/`, data);
   }
 
   update(id: string, data: Partial<ProjectCreate>): Observable<Project> {

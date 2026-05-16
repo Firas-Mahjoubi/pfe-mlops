@@ -174,11 +174,11 @@ export class SidebarComponent implements OnInit, OnDestroy {
 
   nav: NavItem[] = [
     { route: '/dashboard',   label: 'Dashboard',   icon: 'dashboard' },
-    { route: '/projects',    label: 'Projects',    icon: 'projects', badge: 8 },
-    { route: '/experiments', label: 'Experiments', icon: 'beaker',   badge: 6 },
-    { route: '/pipelines',   label: 'Pipelines',   icon: 'pipeline', badge: 2, badgeTone: 'cyan' },
-    { route: '/models',      label: 'Models',      icon: 'model',    badge: 7 },
-    { route: '/deployments', label: 'Deployments', icon: 'rocket',   badge: 6 },
+    { route: '/projects',    label: 'Projects',    icon: 'projects' },
+    { route: '/experiments', label: 'Experiments', icon: 'beaker'   },
+    { route: '/pipelines',   label: 'Pipelines',   icon: 'pipeline' },
+    { route: '/models',      label: 'Models',      icon: 'model'    },
+    { route: '/deployments', label: 'Deployments', icon: 'rocket'   },
   ];
 
   subNav: SubNavItem[] = [

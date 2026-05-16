@@ -253,6 +253,11 @@ def predict(name: str, instances: list) -> dict:
         },
         body=body,
         response_type="object",
+        # Without auth_settings, call_api skips Authorization header injection,
+        # so the K8s API server rejects with 401 even though the configured
+        # Configuration singleton has a valid bearer token. All generated K8s
+        # client methods pass this same value.
+        auth_settings=["BearerToken"],
         _return_http_data_only=True,
         _preload_content=True,
     )

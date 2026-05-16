@@ -237,6 +237,11 @@ async def list_active_deployments(
     refreshed = []
     for dep in deps:
         dep = await _refresh_status(db, dep)
+        if dep.status == DeploymentStatus.DELETED:
+            # KServe says the InferenceService is gone — _refresh_status
+            # already flipped the row to DELETED. Don't keep it in the
+            # response, or the dashboard polls /metrics on it forever.
+            continue
         refreshed.append(_serialize(dep))
     return {"deployments": refreshed}
 

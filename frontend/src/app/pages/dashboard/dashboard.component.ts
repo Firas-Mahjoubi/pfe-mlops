@@ -73,7 +73,7 @@ interface UtilStat {
               </div>
               <div class="text-[11px] text-ink3 mt-1">{{ projectsTotal }} total</div>
             </div>
-            <div class="opacity-90"><app-sparkline [data]="projectsSpark" [w]="160" [h]="36"></app-sparkline></div>
+            <div class="hidden sm:block opacity-90 shrink-0"><app-sparkline [data]="projectsSpark" [w]="160" [h]="36"></app-sparkline></div>
           </div>
         </div>
 
@@ -95,7 +95,7 @@ interface UtilStat {
                 }
               </div>
             </div>
-            <div class="opacity-90"><app-bars [data]="expBars" [w]="160" [h]="36"></app-bars></div>
+            <div class="hidden sm:block opacity-90 shrink-0"><app-bars [data]="expBars" [w]="160" [h]="36"></app-bars></div>
           </div>
         </div>
 
@@ -111,7 +111,7 @@ interface UtilStat {
               </div>
               <div class="text-[11px] text-ink3 mt-1">{{ modelsInProduction }} in production</div>
             </div>
-            <div class="opacity-90"><app-sparkline [data]="modelsSpark" [w]="160" [h]="36" color="#85F4FF"></app-sparkline></div>
+            <div class="hidden sm:block opacity-90 shrink-0"><app-sparkline [data]="modelsSpark" [w]="160" [h]="36" color="#85F4FF"></app-sparkline></div>
           </div>
         </div>
 
@@ -129,7 +129,7 @@ interface UtilStat {
               </div>
               <div class="text-[11px] text-ink3 mt-1">{{ deploymentsReady }} ready · {{ deploymentsCreating }} creating · {{ deploymentsFailed }} failed</div>
             </div>
-            <div class="opacity-90"><app-sparkline [data]="deploySpark" [w]="160" [h]="36" color="#B8FFF9"></app-sparkline></div>
+            <div class="hidden sm:block opacity-90 shrink-0"><app-sparkline [data]="deploySpark" [w]="160" [h]="36" color="#B8FFF9"></app-sparkline></div>
           </div>
         </div>
       </div>

@@ -1,5 +1,4 @@
 import re
-import time
 import logging
 import asyncio
 from typing import Optional
@@ -10,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
+from app.api.v1.cluster import _parse_cpu_nano, _parse_memory_bytes
 from app.database import get_db
 from app.models.deployment import Deployment, DeploymentStatus
 from app.models.ml_model import MLModel
@@ -334,25 +334,27 @@ async def delete_deployment(
     return _serialize(dep)
 
 
-_cpu_cache: dict[str, tuple[float, int]] = {}  # pod_name -> (timestamp, cpu_ns)
-
-
 def _read_pod_metrics_sync(svc_name: str, namespace: str) -> Optional[dict]:
-    # Use the shared k8s bootstrap so the Docker host rewrite is applied
-    # consistently across the cluster-metrics and pod-metrics code paths.
+    """Live CPU+RAM for a deployment's predictor pod via metrics-server.
+
+    Previous version exec'd into the pod and read cgroup v1 paths
+    (/sys/fs/cgroup/memory/memory.usage_in_bytes etc), which silently produce
+    empty output on cgroup v2 hosts (AKS default) -- so percentage parsing
+    always failed and the dashboard showed "not available in local Docker
+    mode" on a real cluster.
+
+    metrics-server is cgroup-agnostic, faster (no pod exec), and gives the
+    same numbers `kubectl top` / HPAs / autoscaler use.
+    """
     from app.services.k8s_client import ensure_k8s_loaded
     ensure_k8s_loaded()
     from kubernetes import client as k8s_client
-    from kubernetes.stream import stream as k8s_stream
 
-    # Build the API client from a fresh copy of the default Configuration so we
-    # always get the rewritten host (host.docker.internal) even if a prior
-    # client was constructed before the rewrite.
     cfg = k8s_client.Configuration.get_default_copy()
     api_client = k8s_client.ApiClient(configuration=cfg)
     v1 = k8s_client.CoreV1Api(api_client=api_client)
+    custom = k8s_client.CustomObjectsApi(api_client=api_client)
 
-    # Find a running pod for this InferenceService
     pods = v1.list_namespaced_pod(
         namespace,
         label_selector=f"serving.kserve.io/inferenceservice={svc_name}",
@@ -361,48 +363,42 @@ def _read_pod_metrics_sync(svc_name: str, namespace: str) -> Optional[dict]:
     if not pods.items:
         logger.warning("_pod_metrics: no running pod for %s", svc_name)
         return None
+    pod = pods.items[0]
+    pod_name = pod.metadata.name
 
-    pod_name = pods.items[0].metadata.name
+    kserve_container = next(
+        (c for c in pod.spec.containers if c.name == "kserve-container"),
+        pod.spec.containers[0],
+    )
+    limits = (kserve_container.resources.limits or {}) if kserve_container.resources else {}
+    cpu_limit_n = _parse_cpu_nano(limits.get("cpu", "0"))
+    mem_limit_b = _parse_memory_bytes(limits.get("memory", "0"))
 
-    # Exec into pod — reads all cgroup values in one call
     try:
-        output = k8s_stream(
-            v1.connect_get_namespaced_pod_exec,
-            pod_name, namespace,
-            command=[
-                "sh", "-c",
-                "cat /sys/fs/cgroup/memory/memory.usage_in_bytes "
-                "&& cat /sys/fs/cgroup/memory/memory.limit_in_bytes "
-                "&& cat /sys/fs/cgroup/cpuacct/cpuacct.usage"
-            ],
-            stderr=False, stdin=False, stdout=True, tty=False,
+        pm = custom.get_namespaced_custom_object(
+            group="metrics.k8s.io",
+            version="v1beta1",
+            namespace=namespace,
+            plural="pods",
+            name=pod_name,
         )
     except Exception as exc:
-        logger.warning("_pod_metrics exec error for %s: %s", pod_name, exc)
+        # Typically the pod was scheduled within the last ~60s and metrics-server
+        # hasn't sampled it yet. Recoverable on the next poll.
+        logger.warning("_pod_metrics metrics-server error for %s: %s", pod_name, exc)
         return None
 
-    try:
-        lines = output.strip().splitlines()
-        mem_used = int(lines[0])
-        mem_limit = int(lines[1])
-        cpu_ns = int(lines[2])
-    except (ValueError, IndexError) as exc:
-        logger.warning("_pod_metrics parse error: %s | output=%r", exc, output[:120])
-        return None
+    cpu_used_n = 0
+    mem_used_b = 0
+    for c in pm.get("containers") or []:
+        usage = c.get("usage") or {}
+        cpu_used_n += _parse_cpu_nano(usage.get("cpu", "0"))
+        mem_used_b += _parse_memory_bytes(usage.get("memory", "0"))
 
-    # Compute CPU % via delta between two calls
-    now = time.time()
-    cpu_pct: Optional[float] = None
-    if pod_name in _cpu_cache:
-        prev_time, prev_ns = _cpu_cache[pod_name]
-        elapsed = now - prev_time
-        if elapsed > 0.5:
-            cpu_pct = round((cpu_ns - prev_ns) / (elapsed * 1e9) * 100, 1)
-    _cpu_cache[pod_name] = (now, cpu_ns)
-
-    mem_pct = round(mem_used / mem_limit * 100, 1) if mem_limit > 0 else 0.0
-    mem_used_mi = round(mem_used / (1024 * 1024), 1)
-    mem_limit_gi = round(mem_limit / (1024 ** 3), 2)
+    cpu_pct = round(cpu_used_n / cpu_limit_n * 100, 1) if cpu_limit_n > 0 else None
+    mem_pct = round(mem_used_b / mem_limit_b * 100, 1) if mem_limit_b > 0 else 0.0
+    mem_used_mi = round(mem_used_b / (1024 * 1024), 1)
+    mem_limit_gi = round(mem_limit_b / (1024 ** 3), 2)
 
     return {
         "cpu_pct": cpu_pct,

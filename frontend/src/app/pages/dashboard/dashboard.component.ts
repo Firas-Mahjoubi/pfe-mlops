@@ -251,7 +251,7 @@ interface UtilStat {
                   } @else {
                     <div class="ml-[92px] flex items-center gap-2 text-[11px] text-ink3">
                       <app-icon name="help" className="w-3 h-3 text-ink3"></app-icon>
-                      <span>Live metrics require an active Kubernetes cluster — not available in local Docker mode.</span>
+                      <span>Live metrics unavailable — pod may still be starting or metrics-server has no sample yet.</span>
                     </div>
                   }
                 </div>

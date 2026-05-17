@@ -97,8 +97,8 @@ type ViewMode = 'table' | 'grid';
       </div>
 
       @if (mode === 'table') {
-        <div class="bg-card border border-line rounded-lg shadow-card overflow-hidden">
-          <div class="grid grid-cols-[minmax(240px,2fr)_90px_120px_90px_90px_90px_140px_40px] px-3 h-9 items-center hairline text-[10.5px] font-semibold tracking-[0.08em] text-ink3 uppercase">
+        <div class="bg-card border border-line rounded-lg shadow-card overflow-x-auto">
+          <div class="grid grid-cols-[minmax(240px,2fr)_90px_120px_90px_90px_90px_140px_40px] min-w-[820px] px-3 h-9 items-center hairline text-[10.5px] font-semibold tracking-[0.08em] text-ink3 uppercase">
             <div>Name</div>
             <div>Status</div>
             <div>Owner</div>
@@ -111,7 +111,7 @@ type ViewMode = 'table' | 'grid';
           @for (p of filtered; track p.id) {
             <div
               (click)="openProject(p)"
-              class="grid grid-cols-[minmax(240px,2fr)_90px_120px_90px_90px_90px_140px_40px] px-3 h-12 items-center row cursor-pointer border-t border-white/[0.04] group"
+              class="grid grid-cols-[minmax(240px,2fr)_90px_120px_90px_90px_90px_140px_40px] min-w-[820px] px-3 h-12 items-center row cursor-pointer border-t border-white/[0.04] group"
             >
               <div class="min-w-0">
                 <div class="flex items-center gap-2">
@@ -143,7 +143,7 @@ type ViewMode = 'table' | 'grid';
           }
         </div>
       } @else {
-        <div class="grid grid-cols-3 gap-3">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           @for (p of filtered; track p.id) {
             <button
               (click)="openProject(p)"

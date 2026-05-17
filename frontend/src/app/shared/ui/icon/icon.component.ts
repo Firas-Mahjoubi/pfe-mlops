@@ -6,7 +6,7 @@ export type IconName =
   | 'dot' | 'play' | 'stop' | 'refresh' | 'logs' | 'upload' | 'file' | 'folder'
   | 'command' | 'gear' | 'help' | 'gitBranch' | 'cpu' | 'activity' | 'zap'
   | 'check' | 'x' | 'warn' | 'filter' | 'sort' | 'kebab' | 'terminal'
-  | 'sun' | 'moon';
+  | 'sun' | 'moon' | 'menu';
 
 @Component({
   selector: 'app-icon',
@@ -58,6 +58,7 @@ export type IconName =
         @case ('terminal')  { <g><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></g> }
         @case ('sun')       { <g><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></g> }
         @case ('moon')      { <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/> }
+        @case ('menu')      { <g><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></g> }
       }
     </svg>
   `,

@@ -1,7 +1,8 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { SidebarComponent } from '../../components/sidebar/sidebar.component';
 import { TopbarComponent } from '../../components/topbar/topbar.component';
+import { MobileNavService } from '../../../core/services/mobile-nav.service';
 
 @Component({
   selector: 'app-dashboard-layout',
@@ -10,7 +11,15 @@ import { TopbarComponent } from '../../components/topbar/topbar.component';
   template: `
     <div class="flex min-h-screen bg-bg">
       <app-sidebar />
-      <div class="flex-1 flex flex-col min-w-0 ml-[232px]">
+      @if (nav.isOpen()) {
+        <button
+          type="button"
+          class="fixed inset-0 z-30 bg-black/50 md:hidden"
+          (click)="nav.close()"
+          aria-label="Close menu"
+        ></button>
+      }
+      <div class="flex-1 flex flex-col min-w-0 md:ml-[232px]">
         <app-topbar />
         <main class="flex-1 min-w-0">
           <router-outlet />
@@ -20,4 +29,6 @@ import { TopbarComponent } from '../../components/topbar/topbar.component';
     </div>
   `,
 })
-export class DashboardLayoutComponent {}
+export class DashboardLayoutComponent {
+  protected nav = inject(MobileNavService);
+}

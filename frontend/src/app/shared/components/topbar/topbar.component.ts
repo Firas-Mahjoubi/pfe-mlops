@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { NavigationEnd, Router } from '@angular/router';
 import { Subscription, filter } from 'rxjs';
 import { AuthService } from '../../../core/auth/auth.service';
+import { MobileNavService } from '../../../core/services/mobile-nav.service';
 import { ThemeService } from '../../../core/services/theme.service';
 import { IconComponent } from '../../ui/icon/icon.component';
 import { KbdComponent } from '../../ui/kbd/kbd.component';
@@ -15,6 +16,16 @@ interface Crumb { label: string; url?: string; active?: boolean; }
   imports: [CommonModule, IconComponent, KbdComponent],
   template: `
     <div class="h-12 shrink-0 bg-bg hairline flex items-center px-4 gap-4 sticky top-0 z-30">
+      <!-- mobile menu hamburger (hidden on md+ where the sidebar is always visible) -->
+      <button
+        type="button"
+        class="md:hidden h-9 w-9 -ml-1 flex items-center justify-center rounded hover:bg-white/5 text-ink2"
+        (click)="mobileNav.toggle()"
+        aria-label="Open menu"
+      >
+        <app-icon name="menu" className="w-5 h-5"></app-icon>
+      </button>
+
       <!-- breadcrumbs -->
       <div class="flex items-center gap-2 text-[13px] min-w-0">
         @for (c of crumbs; track $index; let i = $index) {
@@ -79,6 +90,7 @@ interface Crumb { label: string; url?: string; active?: boolean; }
 export class TopbarComponent implements OnInit, OnDestroy {
   authService = inject(AuthService);
   themeService = inject(ThemeService);
+  protected mobileNav = inject(MobileNavService);
   private router = inject(Router);
   private sub?: Subscription;
 

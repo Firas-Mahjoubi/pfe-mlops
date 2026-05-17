@@ -4,6 +4,7 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { AuthService } from '../../../core/auth/auth.service';
 import { User } from '../../../core/models/user.model';
+import { MobileNavService } from '../../../core/services/mobile-nav.service';
 import { IconComponent, IconName } from '../../ui/icon/icon.component';
 import { LogoComponent } from '../../ui/logo/logo.component';
 
@@ -32,7 +33,13 @@ interface ResourceMini {
   standalone: true,
   imports: [CommonModule, RouterLink, RouterLinkActive, IconComponent, LogoComponent],
   template: `
-    <aside class="w-[232px] shrink-0 bg-bg border-r border-line flex flex-col h-screen fixed left-0 top-0 z-40">
+    <aside
+      class="w-[232px] shrink-0 bg-bg border-r border-line flex flex-col h-screen
+             fixed left-0 top-0 z-40 transition-transform duration-200
+             md:translate-x-0"
+      [class.translate-x-0]="mobileNav.isOpen()"
+      [class.-translate-x-full]="!mobileNav.isOpen()"
+    >
       <!-- brand -->
       <div class="h-12 px-4 flex items-center gap-2 hairline">
         <app-logo></app-logo>
@@ -84,6 +91,7 @@ interface ResourceMini {
             [routerLink]="n.route"
             routerLinkActive
             #rla="routerLinkActive"
+            (click)="mobileNav.close()"
             class="relative w-full h-8 px-2 rounded-md flex items-center gap-2.5 text-[13px] transition-colors duration-150"
             [class]="rla.isActive ? 'bg-cyan3/10 text-ink' : 'text-ink2 hover:text-ink hover:bg-white/[0.03]'"
           >
@@ -104,6 +112,7 @@ interface ResourceMini {
             [routerLink]="s.route"
             routerLinkActive
             #srla="routerLinkActive"
+            (click)="mobileNav.close()"
             class="w-full h-8 px-2 rounded-md flex items-center gap-2.5 text-[13px] transition-colors duration-150"
             [class]="srla.isActive ? 'bg-cyan3/10 text-ink' : 'text-ink2 hover:text-ink hover:bg-white/[0.03]'"
           >
@@ -145,6 +154,7 @@ interface ResourceMini {
 })
 export class SidebarComponent implements OnInit, OnDestroy {
   private authService = inject(AuthService);
+  protected mobileNav = inject(MobileNavService);
   private sub?: Subscription;
 
   userMenuOpen = false;

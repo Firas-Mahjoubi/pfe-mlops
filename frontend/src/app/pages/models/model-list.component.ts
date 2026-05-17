@@ -74,8 +74,8 @@ interface ConfirmState {
               </button>
 
               @if (expanded.has(m.name)) {
-                <div class="border-t border-line bg-raised/30">
-                  <table class="w-full text-[12.5px]">
+                <div class="border-t border-line bg-raised/30 overflow-x-auto">
+                  <table class="w-full min-w-[640px] text-[12.5px]">
                     <thead class="text-[10.5px] font-semibold tracking-[0.08em] uppercase text-ink3">
                       <tr class="border-b border-line">
                         <th class="text-left px-3 py-2">Version</th>

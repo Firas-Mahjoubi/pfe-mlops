@@ -51,8 +51,8 @@ import { StatusComponent, StatusKey } from '../../shared/ui/status/status.compon
           <div class="text-[11.5px] text-ink3 mt-1">Trigger a pipeline from a project to see it here</div>
         </div>
       } @else {
-        <div class="bg-card border border-line rounded-lg overflow-hidden">
-          <table class="w-full text-[12.5px]">
+        <div class="bg-card border border-line rounded-lg overflow-x-auto">
+          <table class="w-full min-w-[760px] text-[12.5px]">
             <thead class="bg-raised/40 text-[10.5px] font-semibold tracking-[0.08em] uppercase text-ink3">
               <tr>
                 <th class="text-left px-3 py-2">ID</th>

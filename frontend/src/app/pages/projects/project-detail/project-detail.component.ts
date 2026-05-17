@@ -111,7 +111,7 @@ interface LogLine {
                 </div>
                 @if (championVersion()) {
                   <div class="grid grid-cols-12 gap-4">
-                    <div class="col-span-3 flex flex-col justify-between">
+                    <div class="col-span-12 sm:col-span-6 lg:col-span-3 flex flex-col justify-between">
                       <div class="text-[10.5px] font-semibold tracking-[0.08em] uppercase text-ink3">Current Champion</div>
                       <div class="mt-2">
                         <div class="text-[15px] font-medium text-ink break-all leading-tight">{{ championVersion()!.name }}:v{{ championVersion()!.version }}</div>
@@ -121,17 +121,17 @@ interface LogLine {
                         </div>
                       </div>
                     </div>
-                    <div class="col-span-3">
+                    <div class="col-span-6 sm:col-span-6 lg:col-span-3">
                       <div class="text-[10.5px] font-semibold tracking-[0.08em] uppercase text-ink3">{{ championMetric().label }}</div>
                       <div class="mt-2 text-[28px] font-semibold tracking-tight leading-none">{{ championMetric().value }}</div>
                       <div class="mt-2 text-[11px] text-good">{{ championMetric().sub }}</div>
                     </div>
-                    <div class="col-span-3">
+                    <div class="col-span-6 sm:col-span-6 lg:col-span-3">
                       <div class="text-[10.5px] font-semibold tracking-[0.08em] uppercase text-ink3">Total Runs</div>
                       <div class="mt-2 text-[28px] font-semibold tracking-tight leading-none">{{ runs.length }}</div>
                       <div class="mt-2 text-[11px] text-ink3">{{ finishedRunsCount() }} finished</div>
                     </div>
-                    <div class="col-span-3">
+                    <div class="col-span-6 sm:col-span-6 lg:col-span-3">
                       <div class="text-[10.5px] font-semibold tracking-[0.08em] uppercase text-ink3">Versions</div>
                       <div class="mt-2 text-[28px] font-semibold tracking-tight leading-none">{{ modelVersions.length }}</div>
                       <div class="mt-2 text-[11px] text-ink3">{{ modelName || 'no model' }}</div>

@@ -61,7 +61,7 @@ interface UtilStat {
     <div class="p-4 space-y-4">
       <!-- Hero KPI strip -->
       <div class="grid grid-cols-12 gap-3">
-        <div class="col-span-3 bg-card border border-line rounded-lg p-3.5 flex flex-col justify-between min-h-[108px] shadow-card">
+        <div class="col-span-6 lg:col-span-3 bg-card border border-line rounded-lg p-3.5 flex flex-col justify-between min-h-[108px] shadow-card">
           <div class="flex items-start justify-between">
             <div>
               <div class="text-[11px] font-semibold tracking-[0.08em] text-ink3 uppercase">Active Projects</div>
@@ -77,7 +77,7 @@ interface UtilStat {
           </div>
         </div>
 
-        <div class="col-span-3 bg-card border border-line rounded-lg p-3.5 flex flex-col justify-between min-h-[108px] shadow-card">
+        <div class="col-span-6 lg:col-span-3 bg-card border border-line rounded-lg p-3.5 flex flex-col justify-between min-h-[108px] shadow-card">
           <div class="flex items-start justify-between">
             <div>
               <div class="text-[11px] font-semibold tracking-[0.08em] text-ink3 uppercase">Experiments</div>
@@ -99,7 +99,7 @@ interface UtilStat {
           </div>
         </div>
 
-        <div class="col-span-3 bg-card border border-line rounded-lg p-3.5 flex flex-col justify-between min-h-[108px] shadow-card">
+        <div class="col-span-6 lg:col-span-3 bg-card border border-line rounded-lg p-3.5 flex flex-col justify-between min-h-[108px] shadow-card">
           <div class="flex items-start justify-between">
             <div>
               <div class="text-[11px] font-semibold tracking-[0.08em] text-ink3 uppercase">Models Registered</div>
@@ -115,7 +115,7 @@ interface UtilStat {
           </div>
         </div>
 
-        <div class="col-span-3 bg-card border border-line rounded-lg p-3.5 flex flex-col justify-between min-h-[108px] shadow-card">
+        <div class="col-span-6 lg:col-span-3 bg-card border border-line rounded-lg p-3.5 flex flex-col justify-between min-h-[108px] shadow-card">
           <div class="flex items-start justify-between">
             <div>
               <div class="text-[11px] font-semibold tracking-[0.08em] text-ink3 uppercase">Deployments</div>
@@ -136,7 +136,7 @@ interface UtilStat {
 
       <!-- 2-col: live + activity -->
       <div class="grid grid-cols-12 gap-3">
-        <div class="col-span-8 space-y-3">
+        <div class="col-span-12 lg:col-span-8 space-y-3">
           <!-- Running now -->
           <app-card [dense]="true">
             <div class="flex items-center justify-between px-3 h-9 hairline">
@@ -170,7 +170,7 @@ interface UtilStat {
                     <div class="mono text-[11px] text-ink2 shrink-0">{{ r.dur }}</div>
                     <app-status s="running"></app-status>
                   </div>
-                  <div class="ml-[92px] grid grid-cols-3 gap-3">
+                  <div class="ml-0 sm:ml-[92px] grid grid-cols-2 sm:grid-cols-3 gap-3">
                     <div>
                       <div class="flex justify-between mb-1">
                         <span class="text-[10px] text-ink3">CPU</span>
@@ -206,7 +206,7 @@ interface UtilStat {
                     <app-status [s]="d.status === 'READY' ? 'active' : 'running'"></app-status>
                   </div>
                   @if (deploymentMetrics[d.id]) {
-                    <div class="ml-[92px] grid grid-cols-3 gap-3">
+                    <div class="ml-0 sm:ml-[92px] grid grid-cols-2 sm:grid-cols-3 gap-3">
                       <!-- CPU -->
                       <div>
                         <div class="flex justify-between mb-1">
@@ -249,7 +249,7 @@ interface UtilStat {
                       </div>
                     </div>
                   } @else {
-                    <div class="ml-[92px] flex items-center gap-2 text-[11px] text-ink3">
+                    <div class="ml-0 sm:ml-[92px] flex items-center gap-2 text-[11px] text-ink3">
                       <app-icon name="help" className="w-3 h-3 text-ink3"></app-icon>
                       <span>Live metrics unavailable — pod may still be starting or metrics-server has no sample yet.</span>
                     </div>
@@ -274,7 +274,7 @@ interface UtilStat {
             </div>
             <div class="p-4">
               @if (clusterReachable) {
-                <div class="grid grid-cols-4 gap-4">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                   @for (u of utilStats; track u.label) {
                     <div>
                       <div class="flex items-center justify-between">
@@ -314,7 +314,7 @@ interface UtilStat {
         </div>
 
         <!-- Right column -->
-        <div class="col-span-4 space-y-3">
+        <div class="col-span-12 lg:col-span-4 space-y-3">
           <app-card title="Quick actions" [dense]="true">
             <div class="p-2 grid grid-cols-1 gap-1">
               @for (q of quickActions; track q.label) {

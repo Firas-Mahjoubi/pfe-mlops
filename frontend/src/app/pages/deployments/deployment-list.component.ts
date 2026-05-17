@@ -68,7 +68,7 @@ import { ConfirmDialogComponent } from '../../shared/ui/confirm-dialog/confirm-d
                 <button (click)="promptDelete(d)" class="h-7 px-2 rounded bg-bad/10 border border-bad/20 text-bad text-[11.5px] hover:bg-bad/20 shrink-0">Delete</button>
               </div>
 
-              <div class="mt-3 grid grid-cols-3 gap-4">
+              <div class="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <div class="flex justify-between mb-1">
                     <span class="text-[10px] text-ink3">CPU</span>

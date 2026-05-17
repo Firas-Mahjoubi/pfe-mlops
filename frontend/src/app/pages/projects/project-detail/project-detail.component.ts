@@ -263,8 +263,8 @@ interface LogLine {
             @if (files.length === 0) {
               <p class="text-sm text-slate-500 text-center py-8">No files uploaded yet.</p>
             } @else {
-              <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-                <table class="w-full">
+              <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-x-auto">
+                <table class="w-full min-w-[760px]">
                   <thead>
                     <tr class="border-b border-slate-700">
                       <th class="text-left px-4 py-3 text-xs font-medium text-slate-400 uppercase">Name</th>
@@ -366,8 +366,8 @@ interface LogLine {
               </div>
 
               <!-- Run table -->
-              <div class="bg-card border border-line rounded-xl overflow-hidden">
-                <table class="w-full">
+              <div class="bg-card border border-line rounded-xl overflow-x-auto">
+                <table class="w-full min-w-[760px]">
                   <thead>
                     <tr class="border-b border-line">
                       <th class="px-4 py-2.5 w-10">
@@ -663,8 +663,8 @@ interface LogLine {
             @if (pipelineRuns.length === 0) {
               <p class="text-sm text-slate-500 text-center py-8">No pipeline runs yet. Trigger one above.</p>
             } @else {
-              <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-                <table class="w-full">
+              <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-x-auto">
+                <table class="w-full min-w-[760px]">
                   <thead>
                     <tr class="border-b border-slate-700">
                       <th class="text-left px-4 py-3 text-xs font-medium text-slate-400 uppercase">Run ID</th>
@@ -982,8 +982,8 @@ interface LogLine {
               }
 
               <!-- Versions table -->
-              <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-                <table class="w-full">
+              <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-x-auto">
+                <table class="w-full min-w-[820px]">
                   <thead>
                     <tr class="border-b border-slate-700">
                       <th class="text-left px-4 py-3 text-xs font-medium text-slate-400 uppercase">Model / Version</th>

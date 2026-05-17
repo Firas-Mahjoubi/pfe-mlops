@@ -80,11 +80,11 @@ interface LogLine {
       </div>
 
       <!-- Tabs -->
-      <div class="hairline flex items-center gap-0 -mb-px">
+      <div class="hairline flex items-center gap-0 -mb-px overflow-x-auto -mx-4 px-4">
         @for (tab of tabs; track tab.id) {
           <button
             (click)="activeTab = tab.id"
-            [class]="'h-10 px-3.5 text-[13px] transition-colors inline-flex items-center gap-2 ' + (activeTab === tab.id ? 'tab-active' : 'text-ink2 hover:text-ink')"
+            [class]="'h-10 px-3.5 text-[13px] transition-colors inline-flex items-center gap-2 shrink-0 ' + (activeTab === tab.id ? 'tab-active' : 'text-ink2 hover:text-ink')"
           >
             <span>{{ tab.label }}</span>
             @if (tabCount(tab.id) != null) {

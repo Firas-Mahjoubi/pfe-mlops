@@ -21,7 +21,7 @@ import { MobileNavService } from '../../../core/services/mobile-nav.service';
       }
       <div class="flex-1 flex flex-col min-w-0 md:ml-[232px]">
         <app-topbar />
-        <main class="flex-1 min-w-0">
+        <main class="flex-1 min-w-0 overflow-x-hidden">
           <router-outlet />
           <div class="h-8"></div>
         </main>

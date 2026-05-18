@@ -13,6 +13,7 @@ import {
   DeploymentService,
   Deployment,
   DeploymentStatus,
+  ApiKey,
 } from '../../../core/services/deployment.service';
 import { Project } from '../../../core/models/project.model';
 import { IconComponent } from '../../../shared/ui/icon/icon.component';
@@ -1214,7 +1215,7 @@ interface LogLine {
                         <!-- actions -->
                         <div class="flex items-center gap-1.5 shrink-0">
                           @if (d.status === 'READY') {
-                            <button (click)="selectedDeployment = selectedDeployment?.id === d.id ? null : d"
+                            <button (click)="toggleSelectedDeployment(d)"
                               class="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11.5px] font-medium rounded-lg transition"
                               [class]="selectedDeployment?.id === d.id ? 'bg-cyan3/20 border border-cyan3/40 text-cyan3' : 'bg-cyan3/10 border border-cyan3/30 text-cyan3 hover:bg-cyan3/20'">
                               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1333,6 +1334,77 @@ interface LogLine {
                             </div>
                           </div>
                         </div>
+
+                        <!-- ── Public API Keys ──────────────────────────── -->
+                        <div class="px-5 py-4 border-t border-line">
+                          <div class="flex items-center justify-between mb-3">
+                            <div>
+                              <div class="text-[11px] font-semibold tracking-[0.07em] uppercase text-ink3">Public API Keys</div>
+                              <div class="text-[11px] text-ink3 mt-0.5">Issue keys for third parties to call this model without a platform account.</div>
+                            </div>
+                            <button (click)="openCreateApiKeyModal(d)"
+                              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11.5px] font-medium rounded-lg bg-cyan3/10 border border-cyan3/30 text-cyan3 hover:bg-cyan3/20 transition shrink-0">
+                              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/>
+                              </svg>
+                              New key
+                            </button>
+                          </div>
+
+                          @if (apiKeysLoading) {
+                            <div class="text-[12px] text-ink3 py-3">Loading keys…</div>
+                          } @else if (apiKeys.length === 0) {
+                            <div class="text-[12px] text-ink3 py-3 italic">No API keys yet. Create one to expose this model publicly.</div>
+                          } @else {
+                            <div class="space-y-1.5">
+                              @for (k of apiKeys; track k.id) {
+                                <div class="flex items-center gap-3 px-3 py-2 bg-raised/40 border border-white/5 rounded-lg">
+                                  <div class="min-w-0 flex-1">
+                                    <div class="flex items-center gap-2">
+                                      <span class="text-[12.5px] font-medium text-ink truncate">{{ k.name }}</span>
+                                      @if (k.revoked_at) {
+                                        <span class="mono text-[10px] px-1.5 py-px rounded bg-bad/15 text-bad">revoked</span>
+                                      }
+                                    </div>
+                                    <div class="flex items-center gap-2 mt-0.5">
+                                      <span class="mono text-[11px] text-ink3">{{ k.prefix }}••••</span>
+                                      <span class="text-[10.5px] text-ink3">·</span>
+                                      <span class="text-[11px] text-ink3">
+                                        @if (k.revoked_at) { revoked {{ timeAgo(k.revoked_at) }} }
+                                        @else if (k.last_used_at) { last used {{ timeAgo(k.last_used_at) }} }
+                                        @else { never used }
+                                      </span>
+                                    </div>
+                                  </div>
+                                  @if (!k.revoked_at) {
+                                    <button (click)="revokeApiKey(d, k)"
+                                      class="text-[11px] text-ink3 hover:text-bad transition px-2 py-1 rounded shrink-0"
+                                      title="Revoke this key">
+                                      Revoke
+                                    </button>
+                                  }
+                                </div>
+                              }
+                            </div>
+                          }
+
+                          @if (activeApiKeys.length > 0) {
+                            <div class="mt-4">
+                              <div class="text-[11px] font-semibold tracking-[0.07em] uppercase text-ink3 mb-2">Use this API from your code</div>
+                              <div class="flex items-center gap-1 mb-2">
+                                @for (lang of snippetLangs; track lang) {
+                                  <button (click)="snippetLang = lang"
+                                    class="px-3 py-1 text-[11px] rounded transition"
+                                    [class]="snippetLang === lang ? 'bg-cyan3/15 text-cyan2 border border-cyan3/30' : 'text-ink3 hover:text-ink hover:bg-white/5 border border-transparent'">
+                                    {{ lang }}
+                                  </button>
+                                }
+                              </div>
+                              <pre class="bg-black/30 border border-line rounded-lg px-3 py-2.5 text-[11.5px] text-good mono overflow-x-auto whitespace-pre">{{ snippetFor(d, snippetLang) }}</pre>
+                              <p class="text-[10.5px] text-ink3 mt-1.5">Replace <span class="mono text-cyan3">mlops_&lt;your_key&gt;</span> with the value you saved when you created the key.</p>
+                            </div>
+                          }
+                        </div>
                       }
                     </div>
                   }
@@ -1343,6 +1415,67 @@ interface LogLine {
         }
       }
     </div>
+
+    <!-- ── Create API key modal ──────────────────────────────────────── -->
+    @if (creatingApiKeyForDeployment) {
+      <div class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+           (click)="cancelCreateApiKey()">
+        <div class="w-full max-w-md bg-base border border-line rounded-2xl shadow-2xl overflow-hidden"
+             (click)="$event.stopPropagation()">
+          @if (!newApiKeyPlaintext) {
+            <div class="px-6 py-5 border-b border-line">
+              <div class="text-[14px] font-semibold text-ink">Create API key</div>
+              <div class="text-[12px] text-ink3 mt-0.5">For: <span class="mono text-cyan3">{{ creatingApiKeyForDeployment.inference_service_name }}</span></div>
+            </div>
+            <div class="px-6 py-5">
+              <label class="block text-[11.5px] text-ink2 mb-1.5">Key name</label>
+              <input
+                [(ngModel)]="newApiKeyName"
+                [ngModelOptions]="{ standalone: true }"
+                placeholder="e.g. Production website, Mobile app, Test"
+                class="w-full h-10 px-3 rounded-md bg-bg/60 border border-white/10 focus:border-cyan3/40 focus-cyan text-[12.5px] text-ink outline-none placeholder:text-ink3"
+                (keydown.enter)="submitCreateApiKey()"
+              />
+              <p class="text-[11px] text-ink3 mt-2">A friendly label so you remember which app this key is for. Not part of the key itself.</p>
+            </div>
+            <div class="px-6 py-4 border-t border-line flex justify-end gap-2">
+              <button (click)="cancelCreateApiKey()"
+                class="px-3 py-2 text-[12px] text-ink2 hover:text-ink transition">Cancel</button>
+              <button (click)="submitCreateApiKey()"
+                [disabled]="!newApiKeyName.trim() || creatingApiKey"
+                class="px-3.5 py-2 text-[12px] font-medium rounded-lg bg-cyan3/10 border border-cyan3/30 text-cyan3 hover:bg-cyan3/20 disabled:opacity-40 transition">
+                {{ creatingApiKey ? 'Creating…' : 'Create key' }}
+              </button>
+            </div>
+          } @else {
+            <div class="px-6 py-5 border-b border-line">
+              <div class="text-[14px] font-semibold text-ink">Your new API key</div>
+              <div class="text-[12px] text-ink3 mt-0.5">Save this now — you won't see it again.</div>
+            </div>
+            <div class="px-6 py-5">
+              <div class="flex items-stretch gap-2">
+                <pre class="flex-1 min-w-0 bg-black/40 border border-line rounded-lg px-3 py-2.5 mono text-[12px] text-cyan2 overflow-x-auto whitespace-pre">{{ newApiKeyPlaintext }}</pre>
+                <button (click)="copyNewApiKey()"
+                  class="px-3 py-2 text-[11.5px] font-medium rounded-lg border bg-white/[0.03] border-line text-ink2 hover:border-white/20 transition shrink-0"
+                  [class]="newApiKeyCopied ? 'bg-good/10 border-good/30 text-good' : ''">
+                  {{ newApiKeyCopied ? 'Copied' : 'Copy' }}
+                </button>
+              </div>
+              <div class="mt-3 px-3 py-2.5 rounded-lg bg-warn/10 border border-warn/30 text-[11.5px] text-warn flex items-start gap-2">
+                <svg class="w-4 h-4 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+                <span>Store this key in a password manager or your app's secret store now. Once you close this dialog, only the prefix <span class="mono">{{ newApiKeyPlaintext.slice(0, 12) }}••••</span> will be visible.</span>
+              </div>
+            </div>
+            <div class="px-6 py-4 border-t border-line flex justify-end">
+              <button (click)="cancelCreateApiKey()"
+                class="px-4 py-2 text-[12px] font-medium rounded-lg bg-cyan3/10 border border-cyan3/30 text-cyan3 hover:bg-cyan3/20 transition">
+                I've saved it
+              </button>
+            </div>
+          }
+        </div>
+      </div>
+    }
 
     <!-- Deploy configuration modal -->
     @if (pendingDeployVersion) {
@@ -1486,6 +1619,24 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
   private deploymentPollInterval: any = null;
   deploymentElapsedTick = 0;
   private deploymentTimerInterval: any = null;
+
+  // ── Public API keys (per-deployment) ─────────────────────────────────
+  apiKeys: ApiKey[] = [];
+  apiKeysLoading = false;
+  /** When non-null, the create-key modal is open for this deployment. */
+  creatingApiKeyForDeployment: Deployment | null = null;
+  newApiKeyName = '';
+  creatingApiKey = false;
+  /** Plaintext of the most-recently-created key — shown ONCE in the modal. */
+  newApiKeyPlaintext: string | null = null;
+  newApiKeyCopied = false;
+  /** Snippet tabs in the "Use this API" panel. */
+  readonly snippetLangs: ReadonlyArray<'cURL' | 'JavaScript' | 'Python'> = ['cURL', 'JavaScript', 'Python'];
+  snippetLang: 'cURL' | 'JavaScript' | 'Python' = 'cURL';
+
+  get activeApiKeys(): ApiKey[] {
+    return this.apiKeys.filter(k => !k.revoked_at);
+  }
 
   activeTab = 'overview';
   isDragging = false;
@@ -2428,6 +2579,101 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
   curlSnippet(d: Deployment): string {
     const url = this.predictEndpoint(d);
     return `# Get a JWT token first:\n#   curl -X POST ${environment.apiBaseUrl}/auth/login \\\n#     -H "Content-Type: application/json" \\\n#     -d '{"email":"<your-email>","password":"<your-password>"}'\n# Then call predict with the access_token:\ncurl -X POST "${url}" \\\n  -H "Authorization: Bearer <ACCESS_TOKEN>" \\\n  -H "Content-Type: application/json" \\\n  -d '{"instances": [[13.54, 14.36, 87.46, 566.3, 0.09779, 0.08129, 0.06664, 0.04781, 0.1885, 0.05766, 0.2699, 0.7886, 2.058, 23.56, 0.008462, 0.0146, 0.02387, 0.01315, 0.0198, 0.0023, 15.11, 19.26, 99.7, 711.2, 0.144, 0.1773, 0.239, 0.1288, 0.2977, 0.07259]]}'`;
+  }
+
+  // ─── Public API keys (per-deployment) ──────────────────────────────────
+  toggleSelectedDeployment(d: Deployment): void {
+    if (this.selectedDeployment?.id === d.id) {
+      this.selectedDeployment = null;
+      this.apiKeys = [];
+    } else {
+      this.selectedDeployment = d;
+      this.loadApiKeys(d);
+    }
+  }
+
+  loadApiKeys(d: Deployment): void {
+    this.apiKeysLoading = true;
+    this.deploymentService.listApiKeys(d.id).subscribe({
+      next: (keys) => {
+        this.apiKeys = keys;
+        this.apiKeysLoading = false;
+      },
+      error: () => {
+        this.apiKeys = [];
+        this.apiKeysLoading = false;
+      },
+    });
+  }
+
+  openCreateApiKeyModal(d: Deployment): void {
+    this.creatingApiKeyForDeployment = d;
+    this.newApiKeyName = '';
+    this.newApiKeyPlaintext = null;
+    this.newApiKeyCopied = false;
+    this.creatingApiKey = false;
+  }
+
+  cancelCreateApiKey(): void {
+    this.creatingApiKeyForDeployment = null;
+    this.newApiKeyName = '';
+    this.newApiKeyPlaintext = null;
+    this.newApiKeyCopied = false;
+  }
+
+  submitCreateApiKey(): void {
+    const d = this.creatingApiKeyForDeployment;
+    const name = this.newApiKeyName.trim();
+    if (!d || !name || this.creatingApiKey) return;
+    this.creatingApiKey = true;
+    this.deploymentService.createApiKey(d.id, name).subscribe({
+      next: (created) => {
+        this.newApiKeyPlaintext = created.key;
+        this.creatingApiKey = false;
+        // Refresh the list under the modal so the new prefix shows up
+        // immediately when the user closes the dialog.
+        this.loadApiKeys(d);
+      },
+      error: () => {
+        this.creatingApiKey = false;
+      },
+    });
+  }
+
+  copyNewApiKey(): void {
+    if (!this.newApiKeyPlaintext) return;
+    navigator.clipboard.writeText(this.newApiKeyPlaintext).then(() => {
+      this.newApiKeyCopied = true;
+      setTimeout(() => { this.newApiKeyCopied = false; }, 2000);
+    });
+  }
+
+  revokeApiKey(d: Deployment, k: ApiKey): void {
+    if (!confirm(`Revoke "${k.name}"? Callers using this key will get 401 from now on.`)) return;
+    this.deploymentService.revokeApiKey(d.id, k.id).subscribe({
+      next: () => this.loadApiKeys(d),
+    });
+  }
+
+  /** Public-API URL the user can paste into their app. */
+  publicPredictUrl(d: Deployment): string {
+    // environment.apiBaseUrl is "/api/v1" in prod (proxied), "http://localhost:8000/api/v1" in dev.
+    // The public endpoint sits at /api/public so we replace the suffix.
+    const base = environment.apiBaseUrl.replace(/\/api\/v1$/, '');
+    const origin = base.startsWith('http') ? base : window.location.origin;
+    return `${origin}/api/public/predict/${d.id}`;
+  }
+
+  snippetFor(d: Deployment, lang: 'cURL' | 'JavaScript' | 'Python'): string {
+    const url = this.publicPredictUrl(d);
+    const sample = '[[13.54, 14.36, 87.46, 566.3, 0.09779, 0.08129, 0.06664, 0.04781, 0.1885, 0.05766, 0.2699, 0.7886, 2.058, 23.56, 0.008462, 0.0146, 0.02387, 0.01315, 0.0198, 0.0023, 15.11, 19.26, 99.7, 711.2, 0.144, 0.1773, 0.239, 0.1288, 0.2977, 0.07259]]';
+    if (lang === 'cURL') {
+      return `curl -X POST "${url}" \\\n  -H "Authorization: Bearer mlops_<your_key>" \\\n  -H "Content-Type: application/json" \\\n  -d '{"instances": ${sample}}'`;
+    }
+    if (lang === 'JavaScript') {
+      return `fetch("${url}", {\n  method: "POST",\n  headers: {\n    "Authorization": "Bearer mlops_<your_key>",\n    "Content-Type": "application/json",\n  },\n  body: JSON.stringify({ instances: ${sample} }),\n})\n  .then(r => r.json())\n  .then(console.log);`;
+    }
+    return `import requests\n\nr = requests.post(\n    "${url}",\n    headers={"Authorization": "Bearer mlops_<your_key>"},\n    json={"instances": ${sample}},\n)\nprint(r.json())`;
   }
 
   isWebhookError(msg: string): boolean {

@@ -41,3 +41,7 @@ class Deployment(Base):
 
     project = relationship("Project", back_populates="deployments")
     model = relationship("MLModel")
+    api_keys = relationship(
+        "DeploymentApiKey", back_populates="deployment",
+        cascade="all, delete-orphan",
+    )

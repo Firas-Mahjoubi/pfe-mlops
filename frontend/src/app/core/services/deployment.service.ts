@@ -34,6 +34,21 @@ export interface PredictResponse {
   [key: string]: unknown;
 }
 
+export interface ApiKey {
+  id: string;
+  deployment_id: string;
+  prefix: string;
+  name: string;
+  created_at: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+}
+
+/** Returned ONLY by POST /api-keys -- includes the plaintext `key`. */
+export interface ApiKeyCreated extends ApiKey {
+  key: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class DeploymentService {
   private http = inject(HttpClient);
@@ -83,5 +98,22 @@ export class DeploymentService {
 
   kserveHealth(): Observable<{ webhook_ok: boolean; pods: { name: string; phase: string; ready: boolean }[]; advice: string }> {
     return this.http.get<any>(`${this.apiUrl}/deployments/kserve-health`);
+  }
+
+  listApiKeys(deploymentId: string): Observable<ApiKey[]> {
+    return this.http.get<ApiKey[]>(`${this.apiUrl}/deployments/${deploymentId}/api-keys`);
+  }
+
+  createApiKey(deploymentId: string, name: string): Observable<ApiKeyCreated> {
+    return this.http.post<ApiKeyCreated>(
+      `${this.apiUrl}/deployments/${deploymentId}/api-keys`,
+      { name }
+    );
+  }
+
+  revokeApiKey(deploymentId: string, keyId: string): Observable<{ revoked: boolean }> {
+    return this.http.delete<{ revoked: boolean }>(
+      `${this.apiUrl}/deployments/${deploymentId}/api-keys/${keyId}`
+    );
   }
 }

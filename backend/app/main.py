@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.public import router as public_router
 from app.api.v1.router import api_router
 from app.config import settings
 from app.database import engine, Base
@@ -35,6 +36,10 @@ app.add_middleware(
 )
 
 app.include_router(api_router)
+# Public, API-key-authenticated endpoints. Mounted at /api/public, OUTSIDE
+# the /api/v1 JWT-protected tree. CORS is wide-open per-handler so any
+# third-party site can call the deployed model.
+app.include_router(public_router)
 
 
 @app.get("/health")

@@ -3,6 +3,9 @@
 End-to-end MLOps platform on Kubernetes — projects, pipelines, MLflow tracking,
 KServe deployments, all behind a single Angular UI.
 
+**📖 For the full picture — what we use, why we use it, and how everything fits
+together — see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).**
+
 ## Local development
 
 KFP API + UI need port-forwards into the in-cluster Kubeflow Pipelines service:

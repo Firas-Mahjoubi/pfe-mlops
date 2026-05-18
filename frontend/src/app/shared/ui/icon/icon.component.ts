@@ -6,7 +6,8 @@ export type IconName =
   | 'dot' | 'play' | 'stop' | 'refresh' | 'logs' | 'upload' | 'file' | 'folder'
   | 'command' | 'gear' | 'help' | 'gitBranch' | 'cpu' | 'activity' | 'zap'
   | 'check' | 'x' | 'warn' | 'filter' | 'sort' | 'kebab' | 'terminal'
-  | 'sun' | 'moon' | 'menu';
+  | 'sun' | 'moon' | 'menu'
+  | 'mail' | 'lock' | 'eye' | 'eyeOff';
 
 @Component({
   selector: 'app-icon',
@@ -59,6 +60,10 @@ export type IconName =
         @case ('sun')       { <g><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></g> }
         @case ('moon')      { <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/> }
         @case ('menu')      { <g><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></g> }
+        @case ('mail')      { <g><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></g> }
+        @case ('lock')      { <g><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></g> }
+        @case ('eye')       { <g><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></g> }
+        @case ('eyeOff')    { <g><path d="M9.88 4.24A10.94 10.94 0 0 1 12 4c6.5 0 10 8 10 8a18 18 0 0 1-2.16 3.19"/><path d="M6.61 6.61A18 18 0 0 0 2 12s3.5 8 10 8a10.94 10.94 0 0 0 5.39-1.39"/><path d="M9.9 9.9a3 3 0 1 0 4.2 4.2"/><path d="m2 2 20 20"/></g> }
       }
     </svg>
   `,

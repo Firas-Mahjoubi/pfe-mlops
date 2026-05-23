@@ -17,6 +17,19 @@ export interface UploadResponse {
   size: number;
 }
 
+export interface CodeWarning {
+  code: string;
+  message: string;
+  severity: 'warn' | 'info';
+  line_no: number | null;
+  snippet: string | null;
+}
+
+export interface AnalyzeResponse {
+  entry_script: string;
+  warnings: CodeWarning[];
+}
+
 @Injectable({ providedIn: 'root' })
 export class UploadService {
   private http = inject(HttpClient);
@@ -40,6 +53,17 @@ export class UploadService {
   deleteFile(projectId: string, filePath: string): Observable<void> {
     return this.http.delete<void>(
       `${this.apiUrl}/projects/${projectId}/files/${encodeURIComponent(filePath)}`
+    );
+  }
+
+  analyzeFile(
+    projectId: string,
+    path: string,
+    entryScript: string = '',
+  ): Observable<AnalyzeResponse> {
+    return this.http.post<AnalyzeResponse>(
+      `${this.apiUrl}/projects/${projectId}/files/analyze`,
+      { path, entry_script: entryScript },
     );
   }
 }

@@ -5,7 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { BaseChartDirective } from 'ng2-charts';
 import { ChartConfiguration, ChartData } from 'chart.js';
 import { ProjectService } from '../../../core/services/project.service';
-import { UploadService, UploadedFile } from '../../../core/services/upload.service';
+import { UploadService, UploadedFile, CodeWarning } from '../../../core/services/upload.service';
 import { ExperimentService, MlflowRun } from '../../../core/services/experiment.service';
 import { PipelineService, PipelineRun, RunLogs } from '../../../core/services/pipeline.service';
 import { ModelService, ModelVersion, ModelStage } from '../../../core/services/model.service';
@@ -257,6 +257,56 @@ interface LogLine {
               <div class="bg-green-500/10 border border-green-500/50 text-green-400 px-4 py-3 rounded-lg mb-6 text-sm">
                 File uploaded successfully!
               </div>
+            }
+
+            <!-- Pre-flight code analysis -->
+            @if (analyzingCode) {
+              <div class="bg-slate-800 rounded-xl p-4 border border-slate-700 mb-6">
+                <div class="flex items-center gap-3">
+                  <div class="w-4 h-4 border-2 border-cyan3 border-t-transparent rounded-full animate-spin"></div>
+                  <span class="text-sm text-slate-300">Analyzing {{ analyzedFileName }}...</span>
+                </div>
+              </div>
+            } @else if (analyzedFileName) {
+              @if (codeWarnings.length === 0) {
+                <div class="bg-good/5 border border-good/30 rounded-lg px-4 py-3 mb-6 flex items-start gap-3">
+                  <div class="mt-0.5 w-5 h-5 rounded-full bg-good/20 text-good flex items-center justify-center shrink-0 text-[12px] font-bold">✓</div>
+                  <div class="text-[13px] text-ink2">
+                    <span class="text-good font-medium">{{ analyzedFileName }}</span> looks good — no issues detected.
+                  </div>
+                </div>
+              } @else {
+                <div class="bg-amber-500/5 border border-amber-500/30 rounded-xl mb-6">
+                  <div class="px-4 py-3 border-b border-amber-500/20 flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                      <div class="w-5 h-5 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center text-[12px] font-bold">!</div>
+                      <div class="text-[13px] font-semibold text-amber-300">
+                        {{ codeWarnings.length }} warning{{ codeWarnings.length === 1 ? '' : 's' }} for {{ analyzedFileName }}
+                      </div>
+                    </div>
+                    <div class="text-[11px] text-ink3">advisory · you can still run</div>
+                  </div>
+                  <ul class="divide-y divide-amber-500/10">
+                    @for (w of codeWarnings; track w.code + (w.line_no ?? 0) + (w.snippet ?? '')) {
+                      <li class="px-4 py-3">
+                        <div class="flex items-start gap-3">
+                          <span class="mono text-[10.5px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 shrink-0 mt-0.5">{{ w.code }}</span>
+                          <div class="flex-1 min-w-0">
+                            <div class="text-[13px] text-ink2 leading-relaxed">{{ w.message }}</div>
+                            @if (w.line_no || w.snippet) {
+                              <div class="mt-1 text-[11.5px] text-ink3 mono truncate">
+                                @if (w.line_no) { <span>line {{ w.line_no }}</span> }
+                                @if (w.line_no && w.snippet) { <span class="text-ink3/60"> · </span> }
+                                @if (w.snippet) { <span>{{ w.snippet }}</span> }
+                              </div>
+                            }
+                          </div>
+                        </div>
+                      </li>
+                    }
+                  </ul>
+                </div>
+              }
             }
 
             <!-- File List -->
@@ -1645,6 +1695,11 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
   uploadSuccess = false;
   pipelineTriggerSuccess = '';
 
+  // Pre-flight code analyzer (static AST scan of the last uploaded script)
+  analyzingCode = false;
+  analyzedFileName = '';
+  codeWarnings: CodeWarning[] = [];
+
   // Log terminal
   selectedLogRunId: string | null = null;
   runLogs: string[] = [];
@@ -1982,10 +2037,11 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
       this.uploadSuccess = false;
 
       this.uploadService.upload(projectId, file).subscribe({
-        next: () => {
+        next: (res) => {
           this.uploading = false;
           this.uploadSuccess = true;
           this.loadFiles(projectId);
+          this.runCodeAnalysis(projectId, res.path, file.name);
           setTimeout(() => (this.uploadSuccess = false), 3000);
         },
         error: () => {
@@ -1993,6 +2049,36 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
         },
       });
     }
+  }
+
+  // Only .py / .ipynb / .zip carry executable code worth analyzing.
+  // Datasets (.csv) and configs (.yaml/.json) are skipped to avoid noise.
+  private isAnalyzable(filename: string): boolean {
+    const lower = filename.toLowerCase();
+    return lower.endsWith('.py') || lower.endsWith('.ipynb') || lower.endsWith('.zip');
+  }
+
+  private runCodeAnalysis(projectId: string, path: string, filename: string): void {
+    if (!this.isAnalyzable(filename)) {
+      this.analyzedFileName = '';
+      this.codeWarnings = [];
+      return;
+    }
+    this.analyzingCode = true;
+    this.analyzedFileName = filename;
+    this.codeWarnings = [];
+    this.uploadService.analyzeFile(projectId, path).subscribe({
+      next: (res) => {
+        this.analyzingCode = false;
+        this.codeWarnings = res.warnings || [];
+      },
+      error: () => {
+        this.analyzingCode = false;
+        // Quietly drop the panel rather than surface a "couldn't analyze"
+        // error -- analysis is advisory, the user can still run.
+        this.analyzedFileName = '';
+      },
+    });
   }
 
   formatSize(bytes: number): string {

@@ -382,6 +382,75 @@ KFP → Argo Workflows → workflow-controller (kubeflow ns)
                   POST {mlflow}/api/2.0/mlflow/model-versions/create
 ```
 
+### User code execution model
+
+The platform accepts `.py` files, `.ipynb` notebooks, and `.zip` archives.
+Anything the user uploads ends up running inside the same training pod via
+a generated `_runner.py` wrapper.
+
+**Why convert `.ipynb` → `.py` (instead of running the notebook natively)?**
+
+- `mlflow.autolog()` + `runpy.run_path()` is a clean, tiny runtime — it
+  works the same for hand-written scripts and converted notebooks.
+- We don't need per-cell outputs preserved (the goal is to train a model,
+  not to render a report). `nbconvert --to script` is stdlib-grade
+  battle-tested; `papermill` would add a heavy dependency for no benefit.
+- Magic lines (`%foo`, `!pip install`, `get_ipython()`) and cell magics
+  (`%%timeit`, `%%capture`) aren't valid Python — the runner strips them
+  before execution. Cell magics drop the whole cell; single-line magics
+  drop just that line.
+
+**What "structured" means here: nothing.**
+
+`runpy.run_path(script, run_name='__main__')` runs the file the same way
+`python script.py` would. So a flat top-level script with no `main()`, no
+functions, just statements one after another — works. The only thing
+autologged libraries care about is whether you call `model.fit(...)` (or
+`mlflow.log_model(...)` directly).
+
+**What the runner already handles automatically:**
+
+| Concern | Handled how |
+|---|---|
+| `plt.show()` blocking the run | `matplotlib.use('Agg')` + monkey-patched `plt.show = no-op` |
+| Missing pip packages | Up to 15 auto-retries with `pip install <missing>` on each `ModuleNotFoundError` |
+| Old `sklearn.preprocessing.Imputer` | Aliased to `SimpleImputer` |
+| Notebook magic lines | Stripped at conversion time (line magics + whole-cell magics) |
+| Scripts using `argparse` with all-`default=` flags | Patched `ArgumentParser.parse_args` falls back to `parse_args([])` on `SystemExit` |
+
+**What the pre-flight analyzer catches (advisory, never blocks Run):**
+
+`POST /api/v1/projects/{id}/files/analyze` (see
+[backend/app/services/code_analyzer.py](../backend/app/services/code_analyzer.py))
+parses the uploaded file with `ast` and surfaces:
+
+- `no_model_fit` — no `.fit()` or `log_model()` call anywhere. The pipeline
+  will succeed but produce nothing to register or deploy.
+- `argparse_used` — script imports `argparse` or constructs an
+  `ArgumentParser`. The runner's soft-fallback handles all-default flags;
+  required flags without defaults still fail (this warning gives the user a
+  heads-up).
+- `hardcoded_path` — string literal matching a local path pattern
+  (`C:\…`, `/home/<user>/…`, `~/Desktop/…`, etc.). Won't exist on the
+  training pod. The platform exposes the uploaded dataset at
+  `os.environ['DATASET_PATH']`.
+- `sys_exit` — top-level `sys.exit()`/`exit()`/`quit()` will abort the
+  script before MLflow autolog finishes.
+- `cell_magic_remains` — notebook cell starts with `%%xyz`; the runtime
+  strip drops the whole cell, so the rest of the script better not depend
+  on it.
+- `syntax_error` — code didn't parse. Probably not what the user expected.
+
+**Runtime safety net for "no run was logged".**
+
+After `runpy.run_path()` returns, the runner asks MLflow whether any run
+was created during this execution. If not, it prints a clear
+`[platform] WARNING: your code finished but no MLflow run was logged…`
+line into the pod logs (which the user sees in the Pipelines tab). The
+pipeline status is still SUCCEEDED — failing it would block debugging
+runs (EDA notebooks, smoke tests) — but the warning makes the silent
+"trained nothing" case impossible to miss.
+
 ### Promote a model version to Production
 
 ```

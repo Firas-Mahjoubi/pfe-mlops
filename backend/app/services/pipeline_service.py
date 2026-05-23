@@ -124,7 +124,29 @@ def run_custom_code(
         if os.path.exists(converted_path):
             with open(converted_path) as fh:
                 lines = fh.readlines()
-            clean = [l for l in lines if not re.match(r"^\s*(%|!|get_ipython)", l)]
+
+            # Strip line magics (`%foo`), shell escapes (`!cmd`), and
+            # `get_ipython()` calls -- all of which are syntax errors
+            # outside Jupyter. Cell magics (`%%foo`) affect the WHOLE
+            # cell, so drop everything until the next nbconvert cell
+            # delimiter (a `# In[` marker, written by nbconvert above
+            # every code cell).
+            clean: list[str] = []
+            skip_cell = False
+            for ln in lines:
+                if skip_cell:
+                    if ln.lstrip().startswith("# In["):
+                        skip_cell = False
+                        clean.append(ln)
+                    # else: still inside the cell-magic cell, drop the line
+                    continue
+                if re.match(r"^\s*%%", ln):
+                    # Entering a cell-magic block; drop the rest of the cell
+                    skip_cell = True
+                    continue
+                if re.match(r"^\s*(%|!|get_ipython)", ln):
+                    continue
+                clean.append(ln)
             with open(converted_path, "w") as fh:
                 fh.writelines(clean)
         entry_script = converted
@@ -147,7 +169,7 @@ def run_custom_code(
 
     # 7. Write MLflow autolog runner into the script's own directory
     runner_src = (
-        "import os, sys, runpy\n"
+        "import os, sys, runpy, time\n"
         # Non-interactive matplotlib backend -- must be set before any other import
         "import matplotlib\n"
         "matplotlib.use('Agg')\n"
@@ -163,14 +185,45 @@ def run_custom_code(
         "    del _sp, _Si\n"
         "except Exception:\n"
         "    pass\n"
+        # argparse soft-fallback: scripts often call ArgumentParser().parse_args()
+        # without passing argv; the platform runs them with no flags. If parsing
+        # fails because of missing args, retry with [] so any default= kicks in.
+        "import argparse as _ap\n"
+        "_orig_parse = _ap.ArgumentParser.parse_args\n"
+        "def _safe_parse_args(self, args=None, namespace=None):\n"
+        "    try:\n"
+        "        return _orig_parse(self, args, namespace)\n"
+        "    except SystemExit:\n"
+        "        print('[platform] argparse: missing args, falling back to defaults')\n"
+        "        return _orig_parse(self, [], namespace)\n"
+        "_ap.ArgumentParser.parse_args = _safe_parse_args\n"
         "mlflow.set_tracking_uri(os.environ['MLFLOW_TRACKING_URI'])\n"
+        "_exp_id = os.environ.get('MLFLOW_EXPERIMENT_ID')\n"
         "try:\n"
-        "    mlflow.set_experiment(experiment_id=os.environ['MLFLOW_EXPERIMENT_ID'])\n"
+        "    mlflow.set_experiment(experiment_id=_exp_id)\n"
         "except Exception:\n"
         "    pass\n"
         "mlflow.autolog(log_models=True, log_datasets=False, silent=False)\n"
+        "_started_ms = int(time.time() * 1000)\n"
         "print('[platform] MLflow autolog enabled - running', sys.argv[1])\n"
         "runpy.run_path(sys.argv[1], run_name='__main__')\n"
+        # No-run detector: after the user script finishes, check whether
+        # autolog actually recorded anything for this execution. If not,
+        # the user's code probably didn't call .fit() -- warn loudly in
+        # the logs so the pipeline doesn't look successful for no reason.
+        "try:\n"
+        "    from mlflow.tracking import MlflowClient as _MC\n"
+        "    _recent = _MC().search_runs(\n"
+        "        experiment_ids=[_exp_id] if _exp_id else [],\n"
+        "        max_results=1,\n"
+        "        order_by=['attributes.start_time DESC'],\n"
+        "    )\n"
+        "    if not _recent or (_recent[0].info.start_time or 0) < _started_ms:\n"
+        "        print('[platform] WARNING: your code finished but no MLflow '\n"
+        "              'run was logged for this execution. Did you forget to '\n"
+        "              'call .fit() or mlflow.log_model()?')\n"
+        "except Exception as _e:\n"
+        "    print('[platform] (could not verify MLflow run creation:', _e, ')')\n"
     )
     runner_path = os.path.join(script_dir, "_runner.py")
     with open(runner_path, "w") as fh:

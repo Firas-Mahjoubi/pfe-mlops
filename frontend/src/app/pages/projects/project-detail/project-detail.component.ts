@@ -832,6 +832,10 @@ interface LogLine {
                                 <div class="flex-1"></div>
 
                                 <!-- Toggles -->
+                                <button (click)="logScriptOnly = !logScriptOnly"
+                                  [disabled]="runLogsUserScript.length === 0"
+                                  [class]="'h-6 px-2 rounded text-[10.5px] mono transition-colors ' + (logScriptOnly ? 'bg-cyan3/15 text-cyan2 ring-1 ring-cyan3/25' : 'text-ink3 hover:text-ink') + (runLogsUserScript.length === 0 ? ' opacity-40 cursor-not-allowed' : '')"
+                                  [title]="logScriptOnly ? 'Showing user-script output only. Click for full Argo/KFP logs.' : 'Showing full logs. Click to hide Argo/KFP boilerplate.'">SCRIPT</button>
                                 <button (click)="logShowTs = !logShowTs"
                                   [class]="'h-6 px-2 rounded text-[10.5px] mono transition-colors ' + (logShowTs ? 'bg-raised/60 text-ink ring-1 ring-white/10' : 'text-ink3 hover:text-ink')"
                                   title="Toggle timestamps">TS</button>
@@ -860,12 +864,12 @@ interface LogLine {
                                   #logContainer
                                   (scroll)="onLogScroll()"
                                 >
-                                  @if (logsLoading && runLogs.length === 0) {
+                                  @if (logsLoading && parsedLogs.length === 0) {
                                     <div class="flex items-center gap-2 text-ink3 px-4 py-3">
                                       <div class="w-3 h-3 border border-ink3 border-t-transparent rounded-full animate-spin"></div>
                                       Fetching logs...
                                     </div>
-                                  } @else if (runLogs.length === 0) {
+                                  } @else if (parsedLogs.length === 0) {
                                     <div class="text-ink3 px-4 py-3">No logs yet.</div>
                                   } @else if (filteredLogs.length === 0) {
                                     <div class="text-ink3 px-4 py-3">No lines match the current filter.</div>
@@ -1703,11 +1707,18 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
   // Log terminal
   selectedLogRunId: string | null = null;
   runLogs: string[] = [];
+  /** Server-side filtered projection: only `[platform]` lines + the
+   *  `=== STDOUT/STDERR ===` blocks. Hides ~500 lines of Argo / KFP
+   *  boilerplate per step that bury the real script error. */
+  runLogsUserScript: string[] = [];
   logsLoading = false;
   private logPollInterval: any = null;
 
   // Log terminal state (enhanced)
   logFilter: 'all' | 'platform' | 'error' = 'all';
+  /** When true (default), render `runLogsUserScript` instead of `runLogs`.
+   *  Toggled via the RAW button -- RAW off = filtered, RAW on = full. */
+  logScriptOnly = true;
   logSearch = '';
   logWrap = true;
   logShowTs = true;
@@ -2166,6 +2177,7 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
     }
     this.selectedLogRunId = runId;
     this.runLogs = [];
+    this.runLogsUserScript = [];
     this.lastRenderedLogLength = 0;
     this.logAutoScroll = true;
     this.logPendingCount = 0;
@@ -2192,6 +2204,7 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
   closeLogs(): void {
     this.selectedLogRunId = null;
     this.runLogs = [];
+    this.runLogsUserScript = [];
     this.logSearch = '';
     this.logFilter = 'all';
     this.logPendingCount = 0;
@@ -2210,10 +2223,12 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
     this.pipelineService.getLogs(runId).subscribe({
       next: (res: RunLogs) => {
         this.logsLoading = false;
-        const prevLen = this.runLogs.length;
+        const prevLen = this.activeLogSource.length;
         this.runLogs = res.logs;
-        if (!this.logAutoScroll && this.runLogs.length > prevLen) {
-          this.logPendingCount += this.runLogs.length - prevLen;
+        this.runLogsUserScript = res.user_script_logs ?? [];
+        const newLen = this.activeLogSource.length;
+        if (!this.logAutoScroll && newLen > prevLen) {
+          this.logPendingCount += newLen - prevLen;
         }
       },
       error: () => { this.logsLoading = false; },
@@ -2282,8 +2297,19 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
     return m ? m[1] : iso.slice(0, 8);
   }
 
+  /** Source array currently rendered in the terminal. Server-side filter
+   *  (`runLogsUserScript`) is preferred when enabled and non-empty; falls
+   *  back to the full `runLogs` so the panel never goes empty if the
+   *  backend hasn't shipped `user_script_logs` yet. */
+  private get activeLogSource(): string[] {
+    if (this.logScriptOnly && this.runLogsUserScript.length > 0) {
+      return this.runLogsUserScript;
+    }
+    return this.runLogs;
+  }
+
   get parsedLogs(): LogLine[] {
-    return this.runLogs.map((raw, i) => this.parseLogLine(raw, i + 1));
+    return this.activeLogSource.map((raw, i) => this.parseLogLine(raw, i + 1));
   }
 
   get filteredLogs(): LogLine[] {

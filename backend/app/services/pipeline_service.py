@@ -778,7 +778,69 @@ async def get_pipeline_run_logs(run_id: str, db: AsyncSession) -> dict | None:
         "kfp_run_id": pipeline_run.kfp_run_id,
         "status": pipeline_run.status.value,
         "logs": logs,
+        "user_script_logs": _filter_user_script_logs(logs),
     }
+
+
+def _filter_user_script_logs(lines: list[str]) -> list[str]:
+    """Project the full pod-log dump down to just what the user wrote / saw.
+
+    Drops the ~500 lines of Argo executor + KFP driver + pod-spec JSON that
+    dominate every step and bury the real error. Keeps:
+
+    - the top-level workflow phase line
+    - every `[platform] ...` line (the runner's own status messages)
+    - the `=== STDOUT ===` / `=== STDERR ===` markers and everything after
+      them within the same pod (where the user-script error actually is)
+
+    Pods that contain none of the above (driver/dag scheduling pods) are
+    dropped entirely so the result is small enough to scan at a glance.
+    """
+    out: list[str] = []
+    pod_header: str | None = None
+    pod_buffer: list[str] = []
+    in_output_block = False
+    pod_has_content = False
+
+    for line in lines:
+        if line.startswith("[platform] Workflow:"):
+            out.append(line)
+            continue
+        if line.startswith("┌── "):
+            pod_header = line
+            pod_buffer = []
+            in_output_block = False
+            pod_has_content = False
+            continue
+        if line.startswith("└──"):
+            if pod_has_content and pod_header is not None:
+                out.append(pod_header)
+                out.extend(pod_buffer)
+                out.append(line)
+                out.append("")
+            pod_header = None
+            pod_buffer = []
+            in_output_block = False
+            pod_has_content = False
+            continue
+        if pod_header is None:
+            continue
+
+        body = line[3:] if line.startswith("│  ") else line.lstrip("│ ")
+
+        if body.startswith("=== STDOUT ===") or body.startswith("=== STDERR ==="):
+            pod_buffer.append(line)
+            pod_has_content = True
+            in_output_block = True
+            continue
+        if body.startswith("[platform]"):
+            pod_buffer.append(line)
+            pod_has_content = True
+            continue
+        if in_output_block:
+            pod_buffer.append(line)
+
+    return out
 
 
 async def get_pipeline_run_status(run_id: str, db: AsyncSession) -> dict:

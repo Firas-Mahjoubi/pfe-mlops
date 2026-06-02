@@ -57,6 +57,10 @@ export interface RunLogs {
   kfp_run_id: string;
   status: string;
   logs: string[];
+  /** Same content as `logs` but with Argo executor / KFP driver / pod-spec
+   *  noise stripped, leaving only `[platform]` lines and the
+   *  `=== STDOUT/STDERR ===` blocks. Backend may omit on older deployments. */
+  user_script_logs?: string[];
 }
 
 export interface CustomCodeTriggerRequest {

@@ -59,78 +59,95 @@ def run_custom_code(
         aws_secret_access_key=minio_secret_key,
     )
 
-    workdir = "/workspace"
-    os.makedirs(workdir, exist_ok=True)
+    try:
+        workdir = "/workspace"
+        os.makedirs(workdir, exist_ok=True)
 
-    # 1. Download code
-    code_filename = code_minio_path.split("/")[-1]
-    local_code = f"{workdir}/{code_filename}"
-    print(f"[platform] Downloading: {code_minio_path}")
-    s3.download_file("user-code", code_minio_path, local_code)
+        # 1. Download code
+        code_filename = code_minio_path.split("/")[-1]
+        local_code = f"{workdir}/{code_filename}"
+        print(f"[platform] Downloading: {code_minio_path}")
+        s3.download_file("user-code", code_minio_path, local_code)
 
-    # 2. Extract zip
-    if code_filename.lower().endswith(".zip"):
-        print(f"[platform] Extracting {code_filename}...")
-        with zipfile.ZipFile(local_code, "r") as z:
-            z.extractall(workdir)
-        os.remove(local_code)
+        # 2. Extract zip
+        if code_filename.lower().endswith(".zip"):
+            print(f"[platform] Extracting {code_filename}...")
+            with zipfile.ZipFile(local_code, "r") as z:
+                z.extractall(workdir)
+            os.remove(local_code)
 
-    # 3. Download separate dataset (optional)
-    if dataset_minio_path:
-        ds_filename = dataset_minio_path.split("/")[-1]
-        local_ds = f"{workdir}/{ds_filename}"
-        print(f"[platform] Downloading dataset: {ds_filename}")
-        s3.download_file("user-code", dataset_minio_path, local_ds)
-        os.environ["DATASET_PATH"] = local_ds
-        print(f"[platform] DATASET_PATH={local_ds}")
+        # 3. Download separate dataset (optional)
+        if dataset_minio_path:
+            ds_filename = dataset_minio_path.split("/")[-1]
+            local_ds = f"{workdir}/{ds_filename}"
+            print(f"[platform] Downloading dataset: {ds_filename}")
+            s3.download_file("user-code", dataset_minio_path, local_ds)
+            os.environ["DATASET_PATH"] = local_ds
+            print(f"[platform] DATASET_PATH={local_ds}")
 
-    # 4. Auto-detect entry script
-    def find_files(ext):
-        found = []
-        for root, _, files in os.walk(workdir):
-            for fname in files:
-                if fname.lower().endswith(ext) and not fname.startswith("_"):
-                    found.append(os.path.relpath(os.path.join(root, fname), workdir))
-        return found
+        # 4. Auto-detect entry script
+        def find_files(ext):
+            found = []
+            for root, _, files in os.walk(workdir):
+                for fname in files:
+                    if fname.lower().endswith(ext) and not fname.startswith("_"):
+                        found.append(os.path.relpath(os.path.join(root, fname), workdir))
+            return found
 
-    if not entry_script:
-        for candidate in ["train.py", "main.py", "run.py", "model.py"]:
-            if os.path.exists(f"{workdir}/{candidate}"):
-                entry_script = candidate
-                break
-    if not entry_script:
-        notebooks = find_files(".ipynb")
-        if notebooks:
-            entry_script = notebooks[0]
-            print(f"[platform] Auto-detected notebook: {entry_script}")
-    if not entry_script:
-        py_files = find_files(".py")
-        if py_files:
-            entry_script = py_files[0]
-            print(f"[platform] Auto-detected script: {entry_script}")
-    if not entry_script:
-        raise RuntimeError(f"No Python/notebook file found in: {os.listdir(workdir)}")
+        if not entry_script:
+            for candidate in ["train.py", "main.py", "run.py", "model.py"]:
+                if os.path.exists(f"{workdir}/{candidate}"):
+                    entry_script = candidate
+                    break
+        if not entry_script:
+            notebooks = find_files(".ipynb")
+            if notebooks:
+                entry_script = notebooks[0]
+                print(f"[platform] Auto-detected notebook: {entry_script}")
+        if not entry_script:
+            py_files = find_files(".py")
+            if py_files:
+                entry_script = py_files[0]
+                print(f"[platform] Auto-detected script: {entry_script}")
+        if not entry_script:
+            raise RuntimeError(f"No Python/notebook file found in: {os.listdir(workdir)}")
 
-    print(f"[platform] Entry point: {entry_script}")
+        print(f"[platform] Entry point: {entry_script}")
 
-    # 5. Convert notebook to .py
-    if entry_script.lower().endswith(".ipynb"):
-        print("[platform] Installing nbconvert for notebook conversion...")
-        subprocess.run(
-            ["pip", "install", "nbconvert==7.16.4", "ipython==8.26.0", "--quiet"],
-            capture_output=True, text=True,
-        )
-        nb_path = f"{workdir}/{entry_script}"
-        print("[platform] Converting notebook to script...")
-        subprocess.run(
-            ["jupyter", "nbconvert", "--to", "script", nb_path],
-            capture_output=True, text=True,
-        )
-        converted = entry_script.rsplit(".", 1)[0] + ".py"
-        converted_path = f"{workdir}/{converted}"
-        if os.path.exists(converted_path):
-            with open(converted_path) as fh:
-                lines = fh.readlines()
+        # 5. Convert notebook to .py
+        if entry_script.lower().endswith(".ipynb"):
+            print("[platform] Installing nbconvert for notebook conversion...", flush=True)
+            inst = subprocess.run(
+                ["pip", "install", "nbconvert==7.16.4", "ipython==8.26.0"],
+                capture_output=True, text=True,
+            )
+            if inst.returncode != 0:
+                print(f"[platform] FAILED installing nbconvert (exit {inst.returncode}):", flush=True)
+                print(inst.stderr[-1000:], flush=True)
+                raise RuntimeError("Could not install nbconvert; .ipynb conversion impossible")
+
+            nb_path = f"{workdir}/{entry_script}"
+            converted = entry_script.rsplit(".", 1)[0] + ".py"
+            converted_path = f"{workdir}/{converted}"
+            # `python -m nbconvert` avoids depending on the `jupyter` CLI entrypoint
+            # being on PATH -- in python:3.11-slim with --user installs it sometimes
+            # ends up at ~/.local/bin which isn't on PATH for the launched subprocess.
+            # The -m form always works as long as nbconvert imported above.
+            print("[platform] Converting notebook to script...", flush=True)
+            conv = subprocess.run(
+                ["python", "-m", "nbconvert", "--to", "script", nb_path],
+                capture_output=True, text=True,
+            )
+            if conv.returncode != 0 or not os.path.exists(converted_path):
+                print(f"[platform] FAILED converting notebook (exit {conv.returncode}):", flush=True)
+                if conv.stderr:
+                    print(conv.stderr[-1000:], flush=True)
+                if conv.stdout:
+                    print(conv.stdout[-1000:], flush=True)
+                raise RuntimeError(
+                    f"nbconvert failed for {entry_script}; "
+                    f"expected output at {converted_path} but it doesn't exist"
+                )
 
             # Strip line magics (`%foo`), shell escapes (`!cmd`), and
             # `get_ipython()` calls -- all of which are syntax errors
@@ -138,6 +155,8 @@ def run_custom_code(
             # cell, so drop everything until the next nbconvert cell
             # delimiter (a `# In[` marker, written by nbconvert above
             # every code cell).
+            with open(converted_path) as fh:
+                lines = fh.readlines()
             clean: list[str] = []
             skip_cell = False
             for ln in lines:
@@ -156,183 +175,214 @@ def run_custom_code(
                 clean.append(ln)
             with open(converted_path, "w") as fh:
                 fh.writelines(clean)
-        entry_script = converted
-        print(f"[platform] Converted to: {entry_script}")
 
-    # 6. Install requirements.txt (check script dir first, then workdir root)
-    print("[platform] Checking for requirements.txt...", flush=True)
-    script_abs = os.path.join(workdir, entry_script)
-    script_dir = os.path.dirname(script_abs)
-    req_file = os.path.join(script_dir, "requirements.txt")
-    if not os.path.exists(req_file):
-        req_file = f"{workdir}/requirements.txt"
-    if os.path.exists(req_file):
-        print("[platform] Installing requirements.txt...", flush=True)
-        r = subprocess.run(
-            ["pip", "install", "-r", req_file],
-            capture_output=False, text=True,
-        )
-        if r.returncode != 0:
-            print(f"[platform] WARNING: some requirements failed to install", flush=True)
-    else:
-        print("[platform] No requirements.txt found, skipping.", flush=True)
+            entry_script = converted
+            print(f"[platform] Converted to: {entry_script}", flush=True)
 
-    # 7. Write MLflow autolog runner into the script's own directory
-    runner_src = (
-        "import os, sys, runpy, time\n"
-        # Non-interactive matplotlib backend -- must be set before any other import
-        "import matplotlib\n"
-        "matplotlib.use('Agg')\n"
-        "import matplotlib.pyplot as _plt\n"
-        "_plt.show = lambda *a, **kw: None\n"
-        "import mlflow\n"
-        # Backward-compat patch: sklearn removed Imputer in 0.22; map it to SimpleImputer
-        "try:\n"
-        "    import sklearn.preprocessing as _sp\n"
-        "    from sklearn.impute import SimpleImputer as _Si\n"
-        "    if not hasattr(_sp, 'Imputer'):\n"
-        "        _sp.Imputer = _Si\n"
-        "    del _sp, _Si\n"
-        "except Exception:\n"
-        "    pass\n"
-        # argparse soft-fallback: scripts often call ArgumentParser().parse_args()
-        # without passing argv; the platform runs them with no flags. If parsing
-        # fails because of missing args, retry with [] so any default= kicks in.
-        "import argparse as _ap\n"
-        "_orig_parse = _ap.ArgumentParser.parse_args\n"
-        "def _safe_parse_args(self, args=None, namespace=None):\n"
-        "    try:\n"
-        "        return _orig_parse(self, args, namespace)\n"
-        "    except SystemExit:\n"
-        "        print('[platform] argparse: missing args, falling back to defaults')\n"
-        "        return _orig_parse(self, [], namespace)\n"
-        "_ap.ArgumentParser.parse_args = _safe_parse_args\n"
-        "mlflow.set_tracking_uri(os.environ['MLFLOW_TRACKING_URI'])\n"
-        "_exp_id = os.environ.get('MLFLOW_EXPERIMENT_ID')\n"
-        "try:\n"
-        "    mlflow.set_experiment(experiment_id=_exp_id)\n"
-        "except Exception:\n"
-        "    pass\n"
-        "mlflow.autolog(log_models=True, log_datasets=False, silent=False)\n"
-        "_started_ms = int(time.time() * 1000)\n"
-        "print('[platform] MLflow autolog enabled - running', sys.argv[1])\n"
-        "runpy.run_path(sys.argv[1], run_name='__main__')\n"
-        # No-run detector: after the user script finishes, check whether
-        # autolog actually recorded anything for this execution. If not,
-        # the user's code probably didn't call .fit() -- warn loudly in
-        # the logs so the pipeline doesn't look successful for no reason.
-        "try:\n"
-        "    from mlflow.tracking import MlflowClient as _MC\n"
-        "    _recent = _MC().search_runs(\n"
-        "        experiment_ids=[_exp_id] if _exp_id else [],\n"
-        "        max_results=1,\n"
-        "        order_by=['attributes.start_time DESC'],\n"
-        "    )\n"
-        "    if not _recent or (_recent[0].info.start_time or 0) < _started_ms:\n"
-        "        print('[platform] WARNING: your code finished but no MLflow '\n"
-        "              'run was logged for this execution. Did you forget to '\n"
-        "              'call .fit() or mlflow.log_model()?')\n"
-        "except Exception as _e:\n"
-        "    print('[platform] (could not verify MLflow run creation:', _e, ')')\n"
-    )
-    print("[platform] Writing _runner.py (autolog wrapper)...", flush=True)
-    runner_path = os.path.join(script_dir, "_runner.py")
-    with open(runner_path, "w") as fh:
-        fh.write(runner_src)
-
-    # 8. Execute with auto-install retry for missing modules
-    if not os.path.exists(script_abs):
-        raise RuntimeError(f"Entry script not found: {script_abs}")
-    print(f"[platform] Starting subprocess for {entry_script}...", flush=True)
-
-    script_basename = os.path.basename(entry_script)
-    result = None
-    max_retries = 15
-    installed = set()
-
-    for attempt in range(max_retries):
-        print(f"[platform] Executing {entry_script} (attempt {attempt + 1})...", flush=True)
-        result = subprocess.run(
-            ["python", "_runner.py", script_basename],
-            cwd=script_dir,
-            capture_output=True,
-            text=True,
-        )
-
-        if result.returncode == 0:
-            break
-
-        # Check for a missing module and auto-install it
-        missing = None
-        for line in result.stderr.splitlines():
-            if "ModuleNotFoundError: No module named" in line:
-                # Extract top-level package name
-                part = line.split("No module named")[-1].strip().strip("'\"")
-                missing = part.split(".")[0]
-                break
-
-        if missing and missing not in installed:
-            print(f"[platform] Auto-installing missing package: {missing}", flush=True)
-            inst = subprocess.run(
-                ["pip", "install", missing],
-                capture_output=True, text=True,
+        # 6. Install requirements.txt (check script dir first, then workdir root)
+        print("[platform] Checking for requirements.txt...", flush=True)
+        script_abs = os.path.join(workdir, entry_script)
+        script_dir = os.path.dirname(script_abs)
+        req_file = os.path.join(script_dir, "requirements.txt")
+        if not os.path.exists(req_file):
+            req_file = f"{workdir}/requirements.txt"
+        if os.path.exists(req_file):
+            print("[platform] Installing requirements.txt...", flush=True)
+            r = subprocess.run(
+                ["pip", "install", "-r", req_file],
+                capture_output=False, text=True,
             )
-            if inst.returncode == 0:
-                installed.add(missing)
-                print(f"[platform] Installed {missing} - retrying...", flush=True)
-                continue
-            else:
-                print(f"[platform] Failed to install {missing}: {inst.stderr[-300:]}", flush=True)
-                break
+            if r.returncode != 0:
+                print(f"[platform] WARNING: some requirements failed to install", flush=True)
         else:
-            # Not a missing-module error, no point retrying
-            break
+            print("[platform] No requirements.txt found, skipping.", flush=True)
 
-    # Surface OOM / SIGKILL specifically. Exit 137 = 128 + 9 (SIGKILL, almost
-    # always the cgroup OOM-killer). Exit 139 = SIGSEGV. Exit -9 / -11 are
-    # the negative-signal variants Python reports on POSIX.
-    if result.returncode in (137, -9):
-        print("[platform] HINT: exit code 137 = SIGKILL. Most likely cause: "
-              "container ran out of memory (cgroup OOM-killer). Try a "
-              "lighter model, smaller batch, or bump the runner memory "
-              "limit.", flush=True)
-    elif result.returncode in (139, -11):
-        print("[platform] HINT: exit code 139 = SIGSEGV (segfault). Often "
-              "indicates a native-library version mismatch (numpy / TF / "
-              "torch) or corrupted shared library.", flush=True)
-
-    print("=== STDOUT ===", flush=True)
-    print(result.stdout, flush=True)
-    if result.stderr:
-        print("=== STDERR ===", flush=True)
-        print(result.stderr, flush=True)
-    if result.returncode != 0:
-        # Persist the user-script error to MinIO so the UI can show "Why?"
-        # WITHOUT scraping ~50 KB of Argo / KFP pod logs (which also get
-        # GC'd after a few hours). Keyed by kfp run id so the backend can
-        # fetch it directly. Tail-truncated to keep it under ~20 KB.
-        error_blob = (
-            f"=== exit code: {result.returncode} ===\n"
-            f"=== stdout (last 5000 chars) ===\n{result.stdout[-5000:]}\n"
-            f"=== stderr (last 10000 chars) ===\n{result.stderr[-10000:]}\n"
+        # 7. Write MLflow autolog runner into the script's own directory
+        runner_src = (
+            "import os, sys, runpy, time\n"
+            # Non-interactive matplotlib backend -- must be set before any other import
+            "import matplotlib\n"
+            "matplotlib.use('Agg')\n"
+            "import matplotlib.pyplot as _plt\n"
+            "_plt.show = lambda *a, **kw: None\n"
+            "import mlflow\n"
+            # Backward-compat patch: sklearn removed Imputer in 0.22; map it to SimpleImputer
+            "try:\n"
+            "    import sklearn.preprocessing as _sp\n"
+            "    from sklearn.impute import SimpleImputer as _Si\n"
+            "    if not hasattr(_sp, 'Imputer'):\n"
+            "        _sp.Imputer = _Si\n"
+            "    del _sp, _Si\n"
+            "except Exception:\n"
+            "    pass\n"
+            # argparse soft-fallback: scripts often call ArgumentParser().parse_args()
+            # without passing argv; the platform runs them with no flags. If parsing
+            # fails because of missing args, retry with [] so any default= kicks in.
+            "import argparse as _ap\n"
+            "_orig_parse = _ap.ArgumentParser.parse_args\n"
+            "def _safe_parse_args(self, args=None, namespace=None):\n"
+            "    try:\n"
+            "        return _orig_parse(self, args, namespace)\n"
+            "    except SystemExit:\n"
+            "        print('[platform] argparse: missing args, falling back to defaults')\n"
+            "        return _orig_parse(self, [], namespace)\n"
+            "_ap.ArgumentParser.parse_args = _safe_parse_args\n"
+            "mlflow.set_tracking_uri(os.environ['MLFLOW_TRACKING_URI'])\n"
+            "_exp_id = os.environ.get('MLFLOW_EXPERIMENT_ID')\n"
+            "try:\n"
+            "    mlflow.set_experiment(experiment_id=_exp_id)\n"
+            "except Exception:\n"
+            "    pass\n"
+            "mlflow.autolog(log_models=True, log_datasets=False, silent=False)\n"
+            "_started_ms = int(time.time() * 1000)\n"
+            "print('[platform] MLflow autolog enabled - running', sys.argv[1])\n"
+            "runpy.run_path(sys.argv[1], run_name='__main__')\n"
+            # No-run detector: after the user script finishes, check whether
+            # autolog actually recorded anything for this execution. If not,
+            # the user's code probably didn't call .fit() -- warn loudly in
+            # the logs so the pipeline doesn't look successful for no reason.
+            "try:\n"
+            "    from mlflow.tracking import MlflowClient as _MC\n"
+            "    _recent = _MC().search_runs(\n"
+            "        experiment_ids=[_exp_id] if _exp_id else [],\n"
+            "        max_results=1,\n"
+            "        order_by=['attributes.start_time DESC'],\n"
+            "    )\n"
+            "    if not _recent or (_recent[0].info.start_time or 0) < _started_ms:\n"
+            "        print('[platform] WARNING: your code finished but no MLflow '\n"
+            "              'run was logged for this execution. Did you forget to '\n"
+            "              'call .fit() or mlflow.log_model()?')\n"
+            "except Exception as _e:\n"
+            "    print('[platform] (could not verify MLflow run creation:', _e, ')')\n"
         )
-        # Threaded through from the submission flow so the backend can
-        # fetch by our DB id directly -- no KFP run id ↔ DB id translation.
-        run_key = pipeline_run_db_id or os.environ.get("KFP_POD_NAME", "unknown")
+        print("[platform] Writing _runner.py (autolog wrapper)...", flush=True)
+        runner_path = os.path.join(script_dir, "_runner.py")
+        with open(runner_path, "w") as fh:
+            fh.write(runner_src)
+
+        # 8. Execute with auto-install retry for missing modules
+        if not os.path.exists(script_abs):
+            raise RuntimeError(f"Entry script not found: {script_abs}")
+        print(f"[platform] Starting subprocess for {entry_script}...", flush=True)
+
+        script_basename = os.path.basename(entry_script)
+        result = None
+        max_retries = 15
+        installed = set()
+
+        for attempt in range(max_retries):
+            print(f"[platform] Executing {entry_script} (attempt {attempt + 1})...", flush=True)
+            result = subprocess.run(
+                ["python", "_runner.py", script_basename],
+                cwd=script_dir,
+                capture_output=True,
+                text=True,
+            )
+
+            if result.returncode == 0:
+                break
+
+            # Check for a missing module and auto-install it
+            missing = None
+            for line in result.stderr.splitlines():
+                if "ModuleNotFoundError: No module named" in line:
+                    # Extract top-level package name
+                    part = line.split("No module named")[-1].strip().strip("'\"")
+                    missing = part.split(".")[0]
+                    break
+
+            if missing and missing not in installed:
+                print(f"[platform] Auto-installing missing package: {missing}", flush=True)
+                inst = subprocess.run(
+                    ["pip", "install", missing],
+                    capture_output=True, text=True,
+                )
+                if inst.returncode == 0:
+                    installed.add(missing)
+                    print(f"[platform] Installed {missing} - retrying...", flush=True)
+                    continue
+                else:
+                    print(f"[platform] Failed to install {missing}: {inst.stderr[-300:]}", flush=True)
+                    break
+            else:
+                # Not a missing-module error, no point retrying
+                break
+
+        # Surface OOM / SIGKILL specifically. Exit 137 = 128 + 9 (SIGKILL, almost
+        # always the cgroup OOM-killer). Exit 139 = SIGSEGV. Exit -9 / -11 are
+        # the negative-signal variants Python reports on POSIX.
+        if result.returncode in (137, -9):
+            print("[platform] HINT: exit code 137 = SIGKILL. Most likely cause: "
+                  "container ran out of memory (cgroup OOM-killer). Try a "
+                  "lighter model, smaller batch, or bump the runner memory "
+                  "limit.", flush=True)
+        elif result.returncode in (139, -11):
+            print("[platform] HINT: exit code 139 = SIGSEGV (segfault). Often "
+                  "indicates a native-library version mismatch (numpy / TF / "
+                  "torch) or corrupted shared library.", flush=True)
+
+        print("=== STDOUT ===", flush=True)
+        print(result.stdout, flush=True)
+        if result.stderr:
+            print("=== STDERR ===", flush=True)
+            print(result.stderr, flush=True)
+        if result.returncode != 0:
+            # Persist the user-script error to MinIO so the UI can show "Why?"
+            # WITHOUT scraping ~50 KB of Argo / KFP pod logs (which also get
+            # GC'd after a few hours). Keyed by kfp run id so the backend can
+            # fetch it directly. Tail-truncated to keep it under ~20 KB.
+            error_blob = (
+                f"=== exit code: {result.returncode} ===\n"
+                f"=== stdout (last 5000 chars) ===\n{result.stdout[-5000:]}\n"
+                f"=== stderr (last 10000 chars) ===\n{result.stderr[-10000:]}\n"
+            )
+            # Threaded through from the submission flow so the backend can
+            # fetch by our DB id directly -- no KFP run id ↔ DB id translation.
+            run_key = pipeline_run_db_id or os.environ.get("KFP_POD_NAME", "unknown")
+            try:
+                s3.put_object(
+                    Bucket="user-code",
+                    Key=f"_errors/{run_key}.txt",
+                    Body=error_blob.encode(),
+                    ContentType="text/plain; charset=utf-8",
+                )
+                print(f"[platform] error blob saved: user-code/_errors/{run_key}.txt")
+            except Exception as _e:  # noqa: BLE001
+                print(f"[platform] could not save error blob: {_e}")
+            raise RuntimeError(f"Script exited {result.returncode}:\n{result.stderr[-3000:]}")
+
+        out = result.stdout.strip()
+        return out[-1000:] if out else "Completed successfully"
+    except Exception:  # noqa: BLE001
+        # Section 9: persist ANY component-level exception (not just user-script
+        # subprocess failures) so the 'Why?' pill shows a real diagnostic
+        # instead of 'no error blob captured'. Covers nbconvert install / S3
+        # download / bad inputs / etc.
+        import traceback as _tb
         try:
+            _error_blob = (
+                "=== component exception (outside subprocess loop) ===\n"
+                + _tb.format_exc()
+                + "\n"
+            )
+            _run_key = pipeline_run_db_id or os.environ.get("KFP_POD_NAME", "unknown")
             s3.put_object(
                 Bucket="user-code",
-                Key=f"_errors/{run_key}.txt",
-                Body=error_blob.encode(),
+                Key=f"_errors/{_run_key}.txt",
+                Body=_error_blob.encode(),
                 ContentType="text/plain; charset=utf-8",
             )
-            print(f"[platform] error blob saved: user-code/_errors/{run_key}.txt")
-        except Exception as _e:  # noqa: BLE001
-            print(f"[platform] could not save error blob: {_e}")
-        raise RuntimeError(f"Script exited {result.returncode}:\n{result.stderr[-3000:]}")
+            print(
+                f"[platform] component exception persisted: user-code/_errors/{_run_key}.txt",
+                flush=True,
+            )
+        except Exception as _persist_e:  # noqa: BLE001
+            print(
+                f"[platform] failed to persist component exception: {_persist_e}",
+                flush=True,
+            )
+        raise
 
-    out = result.stdout.strip()
-    return out[-1000:] if out else "Completed successfully"
 
 
 def _get_kfp_client() -> kfp.Client:

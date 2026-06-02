@@ -118,7 +118,7 @@ def run_custom_code(
         if entry_script.lower().endswith(".ipynb"):
             print("[platform] Installing nbconvert for notebook conversion...", flush=True)
             inst = subprocess.run(
-                ["pip", "install", "nbconvert==7.16.4", "ipython==8.26.0"],
+                ["pip", "install", "nbconvert==7.16.4", "nbformat==5.10.4", "ipython==8.26.0"],
                 capture_output=True, text=True,
             )
             if inst.returncode != 0:
@@ -129,25 +129,31 @@ def run_custom_code(
             nb_path = f"{workdir}/{entry_script}"
             converted = entry_script.rsplit(".", 1)[0] + ".py"
             converted_path = f"{workdir}/{converted}"
-            # `python -m nbconvert` avoids depending on the `jupyter` CLI entrypoint
-            # being on PATH -- in python:3.11-slim with --user installs it sometimes
-            # ends up at ~/.local/bin which isn't on PATH for the launched subprocess.
-            # The -m form always works as long as nbconvert imported above.
+            # Use the nbconvert Python API directly instead of the CLI.
+            # Previously `python -m nbconvert` returned exit 0 without writing
+            # the file (run aa74d561 on 2026-06-02) -- the CLI silently no-op'd
+            # for reasons that didn't surface even with stderr capture.
+            # The Python API raises real exceptions we can both see and
+            # persist via section 9's component-level handler.
             print("[platform] Converting notebook to script...", flush=True)
-            conv = subprocess.run(
-                ["python", "-m", "nbconvert", "--to", "script", nb_path],
-                capture_output=True, text=True,
-            )
-            if conv.returncode != 0 or not os.path.exists(converted_path):
-                print(f"[platform] FAILED converting notebook (exit {conv.returncode}):", flush=True)
-                if conv.stderr:
-                    print(conv.stderr[-1000:], flush=True)
-                if conv.stdout:
-                    print(conv.stdout[-1000:], flush=True)
+            try:
+                import nbformat as _nbformat  # type: ignore
+                from nbconvert import ScriptExporter as _ScriptExporter  # type: ignore
+                with open(nb_path, encoding="utf-8") as _nb_fh:
+                    _nb = _nbformat.read(_nb_fh, as_version=4)
+                _body, _ = _ScriptExporter().from_notebook_node(_nb)
+                with open(converted_path, "w", encoding="utf-8") as _out_fh:
+                    _out_fh.write(_body)
+            except Exception as _conv_e:
+                print(f"[platform] FAILED converting notebook: {type(_conv_e).__name__}: {_conv_e}", flush=True)
                 raise RuntimeError(
-                    f"nbconvert failed for {entry_script}; "
-                    f"expected output at {converted_path} but it doesn't exist"
+                    f"nbconvert failed for {entry_script}: {type(_conv_e).__name__}: {_conv_e}"
+                ) from _conv_e
+            if not os.path.exists(converted_path):
+                raise RuntimeError(
+                    f"nbconvert API ran without error but produced no output at {converted_path}"
                 )
+            print(f"[platform] Notebook converted ({os.path.getsize(converted_path)} bytes)", flush=True)
 
             # Strip line magics (`%foo`), shell escapes (`!cmd`), and
             # `get_ipython()` calls -- all of which are syntax errors

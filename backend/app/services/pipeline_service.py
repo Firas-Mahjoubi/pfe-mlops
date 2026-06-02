@@ -45,6 +45,12 @@ def run_custom_code(
     os.environ["AWS_ACCESS_KEY_ID"] = minio_access_key
     os.environ["AWS_SECRET_ACCESS_KEY"] = minio_secret_key
     os.environ["MLFLOW_S3_ENDPOINT_URL"] = f"http://{minio_endpoint}"
+    # Disable Python's block-buffering for stdout in this process AND in
+    # every child subprocess we spawn. Without this, when the container
+    # gets OOMKilled mid-run, all the in-flight [platform] markers and the
+    # captured subprocess output are lost -- and the failed log just
+    # ends abruptly at the last whole flush. PYTHONUNBUFFERED inherits.
+    os.environ["PYTHONUNBUFFERED"] = "1"
 
     s3 = boto3.client(
         "s3",
@@ -154,19 +160,22 @@ def run_custom_code(
         print(f"[platform] Converted to: {entry_script}")
 
     # 6. Install requirements.txt (check script dir first, then workdir root)
+    print("[platform] Checking for requirements.txt...", flush=True)
     script_abs = os.path.join(workdir, entry_script)
     script_dir = os.path.dirname(script_abs)
     req_file = os.path.join(script_dir, "requirements.txt")
     if not os.path.exists(req_file):
         req_file = f"{workdir}/requirements.txt"
     if os.path.exists(req_file):
-        print("[platform] Installing requirements.txt...")
+        print("[platform] Installing requirements.txt...", flush=True)
         r = subprocess.run(
             ["pip", "install", "-r", req_file],
             capture_output=False, text=True,
         )
         if r.returncode != 0:
-            print(f"[platform] WARNING: some requirements failed to install")
+            print(f"[platform] WARNING: some requirements failed to install", flush=True)
+    else:
+        print("[platform] No requirements.txt found, skipping.", flush=True)
 
     # 7. Write MLflow autolog runner into the script's own directory
     runner_src = (
@@ -226,6 +235,7 @@ def run_custom_code(
         "except Exception as _e:\n"
         "    print('[platform] (could not verify MLflow run creation:', _e, ')')\n"
     )
+    print("[platform] Writing _runner.py (autolog wrapper)...", flush=True)
     runner_path = os.path.join(script_dir, "_runner.py")
     with open(runner_path, "w") as fh:
         fh.write(runner_src)
@@ -233,6 +243,7 @@ def run_custom_code(
     # 8. Execute with auto-install retry for missing modules
     if not os.path.exists(script_abs):
         raise RuntimeError(f"Entry script not found: {script_abs}")
+    print(f"[platform] Starting subprocess for {entry_script}...", flush=True)
 
     script_basename = os.path.basename(entry_script)
     result = None
@@ -240,7 +251,7 @@ def run_custom_code(
     installed = set()
 
     for attempt in range(max_retries):
-        print(f"[platform] Executing {entry_script} (attempt {attempt + 1})...")
+        print(f"[platform] Executing {entry_script} (attempt {attempt + 1})...", flush=True)
         result = subprocess.run(
             ["python", "_runner.py", script_basename],
             cwd=script_dir,
@@ -261,27 +272,40 @@ def run_custom_code(
                 break
 
         if missing and missing not in installed:
-            print(f"[platform] Auto-installing missing package: {missing}")
+            print(f"[platform] Auto-installing missing package: {missing}", flush=True)
             inst = subprocess.run(
                 ["pip", "install", missing],
                 capture_output=True, text=True,
             )
             if inst.returncode == 0:
                 installed.add(missing)
-                print(f"[platform] Installed {missing} - retrying...")
+                print(f"[platform] Installed {missing} - retrying...", flush=True)
                 continue
             else:
-                print(f"[platform] Failed to install {missing}: {inst.stderr[-300:]}")
+                print(f"[platform] Failed to install {missing}: {inst.stderr[-300:]}", flush=True)
                 break
         else:
             # Not a missing-module error, no point retrying
             break
 
-    print("=== STDOUT ===")
-    print(result.stdout)
+    # Surface OOM / SIGKILL specifically. Exit 137 = 128 + 9 (SIGKILL, almost
+    # always the cgroup OOM-killer). Exit 139 = SIGSEGV. Exit -9 / -11 are
+    # the negative-signal variants Python reports on POSIX.
+    if result.returncode in (137, -9):
+        print("[platform] HINT: exit code 137 = SIGKILL. Most likely cause: "
+              "container ran out of memory (cgroup OOM-killer). Try a "
+              "lighter model, smaller batch, or bump the runner memory "
+              "limit.", flush=True)
+    elif result.returncode in (139, -11):
+        print("[platform] HINT: exit code 139 = SIGSEGV (segfault). Often "
+              "indicates a native-library version mismatch (numpy / TF / "
+              "torch) or corrupted shared library.", flush=True)
+
+    print("=== STDOUT ===", flush=True)
+    print(result.stdout, flush=True)
     if result.stderr:
-        print("=== STDERR ===")
-        print(result.stderr)
+        print("=== STDERR ===", flush=True)
+        print(result.stderr, flush=True)
     if result.returncode != 0:
         # Persist the user-script error to MinIO so the UI can show "Why?"
         # WITHOUT scraping ~50 KB of Argo / KFP pod logs (which also get

@@ -7,7 +7,7 @@ import { ChartConfiguration, ChartData } from 'chart.js';
 import { ProjectService } from '../../../core/services/project.service';
 import { UploadService, UploadedFile, CodeWarning } from '../../../core/services/upload.service';
 import { ExperimentService, MlflowRun } from '../../../core/services/experiment.service';
-import { PipelineService, PipelineRun, RunLogs } from '../../../core/services/pipeline.service';
+import { PipelineService, PipelineRun, RunLogs, RunError } from '../../../core/services/pipeline.service';
 import { ModelService, ModelVersion, ModelStage } from '../../../core/services/model.service';
 import {
   DeploymentService,
@@ -731,9 +731,19 @@ interface LogLine {
                       <tr class="border-b border-slate-700/50 hover:bg-slate-700/30">
                         <td class="px-4 py-3 text-sm text-white font-mono">{{ run.id.substring(0, 8) }}</td>
                         <td class="px-4 py-3">
-                          <span [class]="getPipelineStatusClass(run.status)">
-                            {{ run.status }}
-                          </span>
+                          <div class="inline-flex items-center gap-1.5">
+                            <span [class]="getPipelineStatusClass(run.status)">
+                              {{ run.status }}
+                            </span>
+                            @if (run.status === 'FAILED') {
+                              <button
+                                (click)="toggleErrorPanel(run.id)"
+                                [class]="'h-5 px-1.5 rounded text-[10.5px] mono transition-colors ' + (selectedErrorRunId === run.id ? 'bg-bad/20 text-bad ring-1 ring-bad/40' : 'bg-bad/10 text-bad hover:bg-bad/20 ring-1 ring-bad/25')"
+                                title="Show captured stdout/stderr from the failed user script">
+                                {{ selectedErrorRunId === run.id ? '× Hide' : 'Why?' }}
+                              </button>
+                            }
+                          </div>
                         </td>
                         <td class="px-4 py-3">
                           @if (run.pipeline_type === 'custom') {
@@ -773,6 +783,54 @@ interface LogLine {
                           </div>
                         </td>
                       </tr>
+                      <!-- Inline error panel (FAILED runs only) -->
+                      @if (selectedErrorRunId === run.id) {
+                        <tr>
+                          <td colspan="6" class="p-0 max-w-0">
+                            <div class="border-t border-line bg-bg min-w-0 overflow-hidden">
+                              <div class="flex items-center justify-between gap-4 px-4 h-9 border-b border-line bg-card">
+                                <div class="flex items-center gap-3 min-w-0">
+                                  <span class="mono text-[11px] font-semibold tracking-[0.08em] uppercase text-bad">User-script error</span>
+                                  <span class="mono text-[11px] text-ink3 truncate">run <span class="text-ink2">{{ run.id.substring(0, 8) }}</span></span>
+                                  @if (runError.captured) {
+                                    <span class="mono text-[10.5px] text-ink3">{{ runError.bytes }} chars</span>
+                                  }
+                                </div>
+                                <div class="flex items-center gap-2">
+                                  @if (runError.captured) {
+                                    <button (click)="copyError()" class="h-6 px-2 rounded text-[10.5px] mono text-ink3 hover:text-ink transition-colors">
+                                      {{ runErrorCopied ? 'COPIED' : 'COPY' }}
+                                    </button>
+                                  }
+                                  <button (click)="closeErrorPanel()" class="text-ink3 hover:text-ink transition-colors inline-flex items-center gap-1 text-[11.5px]">
+                                    <app-icon name="x" className="w-3.5 h-3.5"></app-icon>
+                                    Close
+                                  </button>
+                                </div>
+                              </div>
+                              <div class="px-4 py-3 min-h-[120px]">
+                                @if (runError.loading) {
+                                  <div class="flex items-center gap-2 text-ink3">
+                                    <div class="w-3 h-3 border border-ink3 border-t-transparent rounded-full animate-spin"></div>
+                                    Fetching error blob...
+                                  </div>
+                                } @else if (runError.captured) {
+                                  <pre class="font-mono text-[11.5px] leading-[1.55] whitespace-pre-wrap break-all text-ink2">{{ runError.text }}</pre>
+                                } @else {
+                                  <div class="text-[12.5px] text-ink3">
+                                    No error blob was captured for this run.
+                                    @if (runError.reason === 'no_error_blob_persisted') {
+                                      <span class="block mt-1 text-[11.5px]">
+                                        The script likely failed before the runner reached the persistence step (image-pull failure, runner crash, or this is an older run from before this feature shipped). Check the full <button (click)="closeErrorPanel(); openLogs(run.id)" class="underline text-cyan3">pod logs</button> for the root cause.
+                                      </span>
+                                    }
+                                  </div>
+                                }
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      }
                       <!-- Inline log terminal -->
                       @if (selectedLogRunId === run.id) {
                         <tr>
@@ -1704,6 +1762,18 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
   analyzedFileName = '';
   codeWarnings: CodeWarning[] = [];
 
+  // Error panel (FAILED runs only -- shows the user-script stdout/stderr
+  // blob the runner persisted to MinIO. Cheap to fetch; survives pod GC.)
+  selectedErrorRunId: string | null = null;
+  runError: {
+    loading: boolean;
+    captured: boolean;
+    text: string;
+    bytes: number;
+    reason: string;
+  } = { loading: false, captured: false, text: '', bytes: 0, reason: '' };
+  runErrorCopied = false;
+
   // Log terminal
   selectedLogRunId: string | null = null;
   runLogs: string[] = [];
@@ -2232,6 +2302,62 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
         }
       },
       error: () => { this.logsLoading = false; },
+    });
+  }
+
+  toggleErrorPanel(runId: string): void {
+    if (this.selectedErrorRunId === runId) {
+      this.closeErrorPanel();
+      return;
+    }
+    this.selectedErrorRunId = runId;
+    this.runError = { loading: true, captured: false, text: '', bytes: 0, reason: '' };
+    this.runErrorCopied = false;
+    this.pipelineService.getError(runId).subscribe({
+      next: (res: RunError) => {
+        if (this.selectedErrorRunId !== runId) return; // user closed/switched
+        if (res.error) {
+          this.runError = {
+            loading: false,
+            captured: true,
+            text: res.error,
+            bytes: res.error.length,
+            reason: res.reason,
+          };
+        } else {
+          this.runError = {
+            loading: false,
+            captured: false,
+            text: '',
+            bytes: 0,
+            reason: res.reason,
+          };
+        }
+      },
+      error: () => {
+        if (this.selectedErrorRunId !== runId) return;
+        this.runError = {
+          loading: false,
+          captured: false,
+          text: '',
+          bytes: 0,
+          reason: 'fetch_failed',
+        };
+      },
+    });
+  }
+
+  closeErrorPanel(): void {
+    this.selectedErrorRunId = null;
+    this.runError = { loading: false, captured: false, text: '', bytes: 0, reason: '' };
+    this.runErrorCopied = false;
+  }
+
+  copyError(): void {
+    if (!this.runError.text) return;
+    navigator.clipboard.writeText(this.runError.text).then(() => {
+      this.runErrorCopied = true;
+      setTimeout(() => (this.runErrorCopied = false), 1500);
     });
   }
 

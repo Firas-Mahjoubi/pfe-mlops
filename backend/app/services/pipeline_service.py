@@ -36,6 +36,7 @@ def run_custom_code(
     minio_secret_key: str,
     mlflow_tracking_uri: str,
     mlflow_experiment_id: str,
+    pipeline_run_db_id: str = "",
 ) -> str:
     import os, re, subprocess, zipfile, boto3
 
@@ -282,6 +283,28 @@ def run_custom_code(
         print("=== STDERR ===")
         print(result.stderr)
     if result.returncode != 0:
+        # Persist the user-script error to MinIO so the UI can show "Why?"
+        # WITHOUT scraping ~50 KB of Argo / KFP pod logs (which also get
+        # GC'd after a few hours). Keyed by kfp run id so the backend can
+        # fetch it directly. Tail-truncated to keep it under ~20 KB.
+        error_blob = (
+            f"=== exit code: {result.returncode} ===\n"
+            f"=== stdout (last 5000 chars) ===\n{result.stdout[-5000:]}\n"
+            f"=== stderr (last 10000 chars) ===\n{result.stderr[-10000:]}\n"
+        )
+        # Threaded through from the submission flow so the backend can
+        # fetch by our DB id directly -- no KFP run id ↔ DB id translation.
+        run_key = pipeline_run_db_id or os.environ.get("KFP_POD_NAME", "unknown")
+        try:
+            s3.put_object(
+                Bucket="user-code",
+                Key=f"_errors/{run_key}.txt",
+                Body=error_blob.encode(),
+                ContentType="text/plain; charset=utf-8",
+            )
+            print(f"[platform] error blob saved: user-code/_errors/{run_key}.txt")
+        except Exception as _e:  # noqa: BLE001
+            print(f"[platform] could not save error blob: {_e}")
         raise RuntimeError(f"Script exited {result.returncode}:\n{result.stderr[-3000:]}")
 
     out = result.stdout.strip()
@@ -570,6 +593,7 @@ def _build_custom_code_pipeline(
     minio_endpoint: str,
     minio_access_key: str,
     minio_secret_key: str,
+    pipeline_run_db_id: str = "",
 ):
     """Build a KFP pipeline that downloads and runs any user-uploaded code."""
 
@@ -584,6 +608,7 @@ def _build_custom_code_pipeline(
             minio_secret_key=minio_secret_key,
             mlflow_tracking_uri=mlflow_tracking_uri,
             mlflow_experiment_id=mlflow_experiment_id,
+            pipeline_run_db_id=pipeline_run_db_id,
         )
         # Every user-triggered "Run code" click must actually train. KFP's
         # per-step caching would otherwise return a cached result when the user
@@ -606,6 +631,26 @@ async def trigger_custom_code_pipeline(
 
     mlflow_uri = os.environ.get("KFP_MLFLOW_URI", "http://host.docker.internal:5000")
     minio_ep = os.environ.get("KFP_MINIO_ENDPOINT", "host.docker.internal:9000")
+    code_name = code_minio_path.split("/")[-1]
+
+    # Create the DB row FIRST (without kfp_run_id) so we have a stable id we
+    # can thread into the pipeline as a parameter. The runner uses this id as
+    # the MinIO key for its error blob, which lets GET /pipelines/{id}/error
+    # fetch by our own id with no KFP-id translation.
+    pipeline_run = PipelineRun(
+        project_id=project.id,
+        kfp_run_id=None,
+        status=PipelineStatus.PENDING,
+        pipeline_type="custom",
+        parameters={
+            "code_file": code_name,
+            "dataset_file": dataset_minio_path.split("/")[-1] if dataset_minio_path else "",
+            "entry_script": entry_script,
+        },
+    )
+    db.add(pipeline_run)
+    await db.commit()
+    await db.refresh(pipeline_run)
 
     pipeline_fn = _build_custom_code_pipeline(
         code_minio_path=code_minio_path,
@@ -616,6 +661,7 @@ async def trigger_custom_code_pipeline(
         minio_endpoint=minio_ep,
         minio_access_key=settings.MINIO_ACCESS_KEY,
         minio_secret_key=settings.MINIO_SECRET_KEY,
+        pipeline_run_db_id=pipeline_run.id,
     )
 
     with tempfile.NamedTemporaryFile(suffix=".yaml", delete=False) as f:
@@ -629,7 +675,6 @@ async def trigger_custom_code_pipeline(
     except Exception:
         client.get_experiment(experiment_name=project.name, namespace=settings.KFP_NAMESPACE)
 
-    code_name = code_minio_path.split("/")[-1]
     run_response = client.create_run_from_pipeline_package(
         pipeline_file=pipeline_yaml,
         experiment_name=project.name,
@@ -641,18 +686,8 @@ async def trigger_custom_code_pipeline(
         enable_caching=False,
     )
 
-    pipeline_run = PipelineRun(
-        project_id=project.id,
-        kfp_run_id=run_response.run_id,
-        status=PipelineStatus.RUNNING,
-        pipeline_type="custom",
-        parameters={
-            "code_file": code_name,
-            "dataset_file": dataset_minio_path.split("/")[-1] if dataset_minio_path else "",
-            "entry_script": entry_script,
-        },
-    )
-    db.add(pipeline_run)
+    pipeline_run.kfp_run_id = run_response.run_id
+    pipeline_run.status = PipelineStatus.RUNNING
     await db.commit()
     await db.refresh(pipeline_run)
 

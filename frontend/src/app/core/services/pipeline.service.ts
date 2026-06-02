@@ -105,7 +105,20 @@ export class PipelineService {
     return this.http.get<RunLogs>(`${this.apiUrl}/pipelines/${runId}/logs`);
   }
 
+  /** Fetch the persisted user-script error blob (~5-15 KB) for a FAILED run.
+   *  `error` is `null` if the run hasn't failed, the blob wasn't persisted
+   *  (older runs, runner died early), or it expired. `reason` distinguishes
+   *  the cases. */
+  getError(runId: string): Observable<RunError> {
+    return this.http.get<RunError>(`${this.apiUrl}/pipelines/${runId}/error`);
+  }
+
   deleteRun(runId: string): Observable<void> {
     return this.http.delete<void>(`${this.apiUrl}/pipelines/${runId}`);
   }
+}
+
+export interface RunError {
+  error: string | null;
+  reason: 'ok' | 'run_not_failed' | 'no_error_blob_persisted';
 }

@@ -346,6 +346,52 @@ async def get_run_logs(
     return logs
 
 
+@router.get("/{run_id}/error")
+async def get_run_error(
+    run_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the user-script error blob persisted to MinIO by the runner
+    on failure (~5-15 KB). Bypasses Argo pod logs entirely so the error
+    survives pod GC and never gets swamped by KFP driver output.
+
+    Always 200 -- a missing blob is signalled via `error: null`. That lets
+    the frontend poll this endpoint as soon as it sees a FAILED status
+    without translating 404s into UI state.
+    """
+    from app.models.pipeline_run import PipelineRun, PipelineStatus
+    from app.utils.minio_client import BUCKET_USER_CODE, get_file
+
+    result = await db.execute(
+        select(PipelineRun)
+        .join(Project, PipelineRun.project_id == Project.id)
+        .where(PipelineRun.id == run_id, Project.user_id == current_user.id)
+    )
+    pipeline_run = result.scalar_one_or_none()
+    if not pipeline_run:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline run not found"
+        )
+
+    if pipeline_run.status != PipelineStatus.FAILED:
+        return {"error": None, "reason": "run_not_failed"}
+
+    # The runner writes _errors/{pipeline_run_db_id}.txt -- keyed by our
+    # DB id (threaded in via the component parameter at submission time).
+    try:
+        blob = get_file(BUCKET_USER_CODE, f"_errors/{pipeline_run.id}.txt")
+        return {
+            "error": blob.decode("utf-8", errors="replace"),
+            "reason": "ok",
+        }
+    except Exception:
+        # Most common case: failed before the runner reached the persistence
+        # block (e.g. KFP image pull failed, or this is an old run from
+        # before this feature was deployed).
+        return {"error": None, "reason": "no_error_blob_persisted"}
+
+
 @router.get("/{run_id}")
 async def get_run_status(
     run_id: str,

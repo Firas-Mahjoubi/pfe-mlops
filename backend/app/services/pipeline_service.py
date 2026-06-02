@@ -221,6 +221,46 @@ def run_custom_code(
             "    del _sp, _Si\n"
             "except Exception:\n"
             "    pass\n"
+            # google.colab compatibility shim: notebooks lifted out of Colab
+            # commonly use `from google.colab import files / drive / userdata`.
+            # google.colab isn't pip-installable -- it only exists in the
+            # Colab runtime. We register synthetic modules so the imports
+            # succeed, and map files.upload() to the platform's DATASET_PATH.
+            "import types as _t\n"
+            "_colab = _t.ModuleType('google.colab')\n"
+            "_colab_files = _t.ModuleType('google.colab.files')\n"
+            "def _colab_files_upload(*a, **kw):\n"
+            "    _p = os.environ.get('DATASET_PATH')\n"
+            "    if not _p or not os.path.exists(_p):\n"
+            "        print('[platform] google.colab.files.upload() shim called but no DATASET_PATH; returning empty dict')\n"
+            "        return {}\n"
+            "    with open(_p, 'rb') as _fh:\n"
+            "        _data = _fh.read()\n"
+            "    _name = os.path.basename(_p)\n"
+            "    print('[platform] google.colab.files.upload() shim returning', _name, '(', len(_data), 'bytes)')\n"
+            "    return {_name: _data}\n"
+            "def _colab_files_download(_name, *a, **kw):\n"
+            "    print('[platform] google.colab.files.download(', _name, ') shim: no-op')\n"
+            "_colab_files.upload = _colab_files_upload\n"
+            "_colab_files.download = _colab_files_download\n"
+            "_colab.files = _colab_files\n"
+            "_colab_drive = _t.ModuleType('google.colab.drive')\n"
+            "def _colab_drive_mount(*a, **kw):\n"
+            "    print('[platform] google.colab.drive.mount() shim: no-op (use $DATASET_PATH for data access)')\n"
+            "_colab_drive.mount = _colab_drive_mount\n"
+            "_colab.drive = _colab_drive\n"
+            "_colab_userdata = _t.ModuleType('google.colab.userdata')\n"
+            "def _colab_userdata_get(_name):\n"
+            "    return os.environ.get(_name, '')\n"
+            "_colab_userdata.get = _colab_userdata_get\n"
+            "_colab.userdata = _colab_userdata\n"
+            "_google_pkg = sys.modules.get('google') or _t.ModuleType('google')\n"
+            "_google_pkg.colab = _colab\n"
+            "sys.modules['google'] = _google_pkg\n"
+            "sys.modules['google.colab'] = _colab\n"
+            "sys.modules['google.colab.files'] = _colab_files\n"
+            "sys.modules['google.colab.drive'] = _colab_drive\n"
+            "sys.modules['google.colab.userdata'] = _colab_userdata\n"
             # argparse soft-fallback: scripts often call ArgumentParser().parse_args()
             # without passing argv; the platform runs them with no flags. If parsing
             # fails because of missing args, retry with [] so any default= kicks in.
@@ -275,6 +315,12 @@ def run_custom_code(
         result = None
         max_retries = 15
         installed = set()
+        # Packages that look like pip names but aren't installable from PyPI.
+        # `google.colab` lives only in the Colab runtime; the runner's shim
+        # above should have prevented this `ModuleNotFoundError`, but if it
+        # somehow leaks through (e.g. an `importlib.reload` in user code)
+        # don't waste a retry on a `pip install` that always fails.
+        UNINSTALLABLE = {"google.colab", "google"}
 
         for attempt in range(max_retries):
             print(f"[platform] Executing {entry_script} (attempt {attempt + 1})...", flush=True)
@@ -290,12 +336,25 @@ def run_custom_code(
 
             # Check for a missing module and auto-install it
             missing = None
+            missing_full = None
             for line in result.stderr.splitlines():
                 if "ModuleNotFoundError: No module named" in line:
                     # Extract top-level package name
                     part = line.split("No module named")[-1].strip().strip("'\"")
+                    missing_full = part
                     missing = part.split(".")[0]
                     break
+
+            if missing_full in UNINSTALLABLE or missing in UNINSTALLABLE:
+                print(
+                    f"[platform] '{missing_full}' is not pip-installable "
+                    f"(typically a runtime-only module like google.colab). "
+                    f"The runner's shim should have provided it -- the import "
+                    f"may be happening BEFORE the shim is registered, or "
+                    f"importlib.reload bypassed it. Not retrying.",
+                    flush=True,
+                )
+                break
 
             if missing and missing not in installed:
                 print(f"[platform] Auto-installing missing package: {missing}", flush=True)

@@ -189,6 +189,8 @@ def _detect_python(source: str, *, filename: str = "<source>") -> list[CodeWarni
     uses_argparse_call = False
     argparse_line: int | None = None
     sys_exit_at_top: list[int] = []
+    colab_line: int | None = None
+    colab_submodules: set[str] = set()
 
     # Top-level statements -- needed to distinguish "sys.exit() at module
     # level" (will abort training) from "sys.exit() inside a never-called
@@ -211,10 +213,19 @@ def _detect_python(source: str, *, filename: str = "<source>") -> list[CodeWarni
                 if alias.name == "argparse":
                     uses_argparse_import = True
                     argparse_line = argparse_line or node.lineno
+                # `import google.colab` / `import google.colab.files`
+                if alias.name == "google.colab" or alias.name.startswith("google.colab."):
+                    colab_line = colab_line or node.lineno
+                    colab_submodules.add(alias.name.removeprefix("google.colab.") or "(root)")
         if isinstance(node, ast.ImportFrom):
             if node.module == "argparse":
                 uses_argparse_import = True
                 argparse_line = argparse_line or node.lineno
+            # `from google.colab import files` / `from google.colab.drive import ...`
+            if node.module and (node.module == "google.colab" or node.module.startswith("google.colab.")):
+                colab_line = colab_line or node.lineno
+                for alias in node.names:
+                    colab_submodules.add(alias.name)
 
         # --- ArgumentParser(...) call ---
         if isinstance(node, ast.Call):
@@ -283,6 +294,21 @@ def _detect_python(source: str, *, filename: str = "<source>") -> list[CodeWarni
                 "The run will finish but won't produce a model -- nothing "
                 "to register or deploy."
             ),
+        ))
+
+    if colab_line is not None:
+        used = ", ".join(sorted(colab_submodules)) or "?"
+        warnings.append(CodeWarning(
+            code="colab_imports",
+            severity="info",
+            message=(
+                f"Notebook uses `google.colab` ({used}). The platform "
+                "auto-stubs `files.upload()` (returns your uploaded "
+                "dataset), `files.download()` / `drive.mount()` (no-ops), "
+                "and `userdata.get()` (reads env vars). Code relying on "
+                "Colab-specific behaviour beyond these may not run."
+            ),
+            line_no=colab_line,
         ))
 
     return warnings

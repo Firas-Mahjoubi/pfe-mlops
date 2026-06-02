@@ -203,6 +203,19 @@ def run_custom_code(
         else:
             print("[platform] No requirements.txt found, skipping.", flush=True)
 
+        # 6b. Pin protobuf preemptively. mlflow 2.11's generated proto code
+        # imports `from google.protobuf import service` which was removed
+        # in protobuf 5.x. tensorflow/keras pull protobuf 5+ by default,
+        # so unless we lock the range now, the auto-install loop will
+        # break `import mlflow` in the retry. mlflow accepts 3.20.3 - 4.x.
+        print("[platform] Pinning protobuf to mlflow-compatible range (<5)...", flush=True)
+        _pin = subprocess.run(
+            ["pip", "install", "--quiet", "protobuf>=3.20.3,<5"],
+            capture_output=True, text=True,
+        )
+        if _pin.returncode != 0:
+            print(f"[platform] WARNING: protobuf pin failed: {_pin.stderr[-300:]}", flush=True)
+
         # 7. Write MLflow autolog runner into the script's own directory
         runner_src = (
             "import os, sys, runpy, time\n"
@@ -356,6 +369,29 @@ def run_custom_code(
                 )
                 break
 
+            # Specific recovery for the most common dep conflict: a
+            # previously-installed heavyweight (tensorflow / keras / torch)
+            # pulled protobuf >= 5, which removed `google.protobuf.service`
+            # -- breaking mlflow 2.11's generated protos. The retry loop
+            # can't fix this via the missing-module path because it's an
+            # ImportError, not a ModuleNotFoundError. Re-pin protobuf and
+            # retry once.
+            if (
+                "cannot import name 'service' from 'google.protobuf'" in result.stderr
+                and "protobuf_repin" not in installed
+            ):
+                print("[platform] Detected protobuf 5.x conflict (mlflow can't import service). "
+                      "Re-pinning protobuf<5 and retrying...", flush=True)
+                _repin = subprocess.run(
+                    ["pip", "install", "--quiet", "--force-reinstall", "protobuf>=3.20.3,<5"],
+                    capture_output=True, text=True,
+                )
+                if _repin.returncode == 0:
+                    installed.add("protobuf_repin")
+                    continue
+                print(f"[platform] protobuf re-pin failed: {_repin.stderr[-300:]}", flush=True)
+                break
+
             if missing and missing not in installed:
                 print(f"[platform] Auto-installing missing package: {missing}", flush=True)
                 inst = subprocess.run(
@@ -364,6 +400,16 @@ def run_custom_code(
                 )
                 if inst.returncode == 0:
                     installed.add(missing)
+                    # If a known protobuf-bumper just got installed,
+                    # immediately re-pin protobuf before the next retry so
+                    # mlflow still imports. Mirrors the preemptive pin from
+                    # the setup phase.
+                    if missing in {"tensorflow", "keras", "torch", "onnx", "protobuf"}:
+                        print(f"[platform] Re-pinning protobuf<5 after {missing} install...", flush=True)
+                        subprocess.run(
+                            ["pip", "install", "--quiet", "protobuf>=3.20.3,<5"],
+                            capture_output=True, text=True,
+                        )
                     print(f"[platform] Installed {missing} - retrying...", flush=True)
                     continue
                 else:

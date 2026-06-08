@@ -1,0 +1,68 @@
+@startuml class_domain
+' Full domain class diagram. For per-sprint increments, render a subset:
+'   Sprint 1: User, Project
+'   Sprint 2: + PipelineRun
+'   Sprint 3: + MLModel, Deployment
+'   Sprint 4: + DeploymentApiKey
+' Render to ../images/class_domain.pdf (and class_sprint1.pdf etc. as subsets)
+skinparam shadowing false
+hide circle
+
+class User {
+  +id : UUID
+  +email : string
+  +hashed_password : string
+  +full_name : string
+  +role : enum (user|admin)
+  +is_active : bool
+}
+
+class Project {
+  +id : UUID
+  +name : string
+  +mlflow_experiment_id : string
+  +created_at : datetime
+}
+
+class PipelineRun {
+  +id : UUID
+  +kfp_run_id : string
+  +status : enum
+  +parameters : json
+  +started_at : datetime
+  +finished_at : datetime
+}
+
+class MLModel {
+  +id : UUID
+  +mlflow_model_name : string
+  +version : int
+  +stage : enum
+  +artifact_uri : string
+}
+
+class Deployment {
+  +id : UUID
+  +inference_service_name : string
+  +endpoint_url : string
+  +status : enum
+  +replicas : int
+}
+
+class DeploymentApiKey {
+  +id : UUID
+  +key_hash : string
+  +prefix : string
+  +name : string
+  +created_at : datetime
+  +last_used_at : datetime
+  +revoked_at : datetime
+}
+
+User "1" -- "0..*" Project
+Project "1" -- "0..*" PipelineRun
+Project "1" -- "0..*" MLModel
+Project "1" -- "0..*" Deployment
+MLModel "1" -- "0..*" Deployment
+Deployment "1" -- "0..*" DeploymentApiKey
+@enduml

@@ -1,0 +1,238 @@
+%==============================================================================
+%  CHAPTER 1 — GENERAL CONTEXT OF THE PROJECT
+%==============================================================================
+\chapter{General Context of the Project}
+\label{chap:context}
+
+\section*{Introduction}
+This chapter sets the stage for the project. It presents the host organization,
+the framework of the end-of-studies project, a study of the existing situation
+and its shortcomings, the proposed solution, and finally the method and
+work environment adopted to carry out the work.
+
+% ---------------------------------------------------------------------------
+\section{Host Organization}
+\label{sec:host-org}
+
+% >>> USER: replace this section with INSOMEA's real presentation. Keep the
+% >>> sub-structure (presentation / activities / org chart). Add the logo and
+% >>> an org-chart figure into images/ and reference it.
+
+\textbf{INSOMEA} (INSOMEA Computer Solutions) is a Microsoft Cloud Gold Partner
+and one of the leading cloud IT solution providers in the Middle East and Africa
+(MEA) region. Founded in 2016, it fulfills the IT requirements of local, regional,
+and international organizations and specializes in Microsoft~365, Microsoft Azure,
+cybersecurity, and professional training. The company operates from six offices
+across Tunisia, Bahrain, France, Algeria, Morocco, and the Ivory Coast, with a
+team of more than fifty employees serving over five hundred customers, and more
+than eight years of expertise. A Microsoft Cloud Partner since 2017, INSOMEA has
+been named Microsoft \emph{Partner of the Year} on five occasions, in Bahrain
+(2020) and in Tunisia (2021 and 2022) among them, and holds more than fifteen
+Gold competencies together with eight advanced specializations.
+
+\subsection{Areas of Activity}
+INSOMEA delivers smart, cost-effective IT solutions built on Microsoft
+technologies, organized around three main pillars:
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{Modern Workplace}, modernizing collaboration and productivity
+        with Microsoft~365 and Microsoft Teams, including adoption and
+        change-management services;
+  \item \textbf{Security}, securing client environments through identity and
+        access management, information protection and governance, and threat
+        protection;
+  \item \textbf{Cloud \& Infrastructure}, Microsoft Azure cloud platform,
+        datacenter, DevOps, and application development / integration.
+\end{itemize}
+In addition, the \textbf{INSOMEA Training Center} offers a broad catalog of
+Microsoft certification courses delivered by Microsoft Certified Trainers (MCTs).
+The company's engagement methodology rests on four core values: end-to-end change
+management, a fully certified technical team, solution adoption, and continuous
+support.
+
+% ---------------------------------------------------------------------------
+\section{Project Framework}
+\label{sec:framework}
+This work was conducted as an end-of-studies project (Projet de Fin d'\'Etudes),
+the final milestone of the engineering cycle, over a period of six months. Its
+objective is to design and build a complete \gls{mlops} platform that automates
+the machine-learning lifecycle, from code upload through to a live, queryable
+prediction service.
+
+% ---------------------------------------------------------------------------
+\section{Study of the Existing Situation}
+\label{sec:existing}
+Before designing the solution, it is useful to characterize how machine-learning
+models are typically taken from experiment to production in teams that lack a
+dedicated platform. The prevailing workflow is largely manual:
+
+\begin{enumerate}[leftmargin=1.6em]
+  \item A data scientist trains a model locally, inside a Jupyter notebook, on a
+        personal machine.
+  \item Results (accuracy, loss, hyper-parameters) are recorded informally ---
+        in the notebook output, a spreadsheet, or not at all.
+  \item The trained model is serialized to a file and shared by email or a shared
+        drive.
+  \item An engineer wraps the model in a web service by hand and deploys it
+        through custom scripts onto a server.
+  \item Monitoring, if any, is limited to checking that the service responds.
+\end{enumerate}
+
+% ---------------------------------------------------------------------------
+\section{Critique of the Existing Situation}
+\label{sec:critique}
+This manual workflow suffers from well-known weaknesses:
+
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{No reproducibility.} Without a record of the exact code, data,
+        and parameters of a run, results cannot be reliably reproduced.
+  \item \textbf{Lost experiments.} Informal tracking means that comparisons
+        between models are unreliable and historical runs are quickly forgotten.
+  \item \textbf{``Works on my machine''.} Differences between the developer's
+        environment and the production server cause failures that are hard to
+        diagnose.
+  \item \textbf{Slow, error-prone deployment.} Hand-written deployment scripts
+        are brittle, must be repeated for every model, and are a frequent source
+        of incidents.
+  \item \textbf{No scalability.} A single hand-managed server cannot elastically
+        scale to demand or isolate models from one another.
+\end{itemize}
+
+These limitations motivate a platform that automates and standardizes the entire
+lifecycle.
+
+% ---------------------------------------------------------------------------
+\section{Proposed Solution}
+\label{sec:solution}
+The proposed solution is a self-hosted \gls{mlops} platform that lets a single
+user, through a web browser:
+
+\begin{enumerate}[leftmargin=1.6em]
+  \item sign up and sign in (token-based authentication);
+  \item create a \textbf{project} as an organizing unit, each backed by its own
+        experiment-tracking namespace;
+  \item upload code (\texttt{.py}, \texttt{.ipynb}, or \texttt{.zip}) and a
+        dataset through the browser;
+  \item trigger a \textbf{training pipeline} that runs on a \gls{k8s} cluster;
+  \item automatically capture metrics, parameters, and artifacts from each run;
+  \item browse, \textbf{register}, and \textbf{promote} model versions
+        (Staging / Production / Archived);
+  \item \textbf{deploy} a promoted model as a live \gls{http} prediction service;
+  \item send sample inputs and receive predictions back;
+  \item monitor live cluster and per-pod metrics from a dashboard;
+  \item (as an administrator) manage user accounts and roles and oversee the
+        whole platform.
+\end{enumerate}
+
+The platform runs on a real Kubernetes cluster and ships every change to a public
+URL through an automated \gls{cicd} pipeline.
+
+% ---------------------------------------------------------------------------
+\section{Adopted Method: Scrum}
+\label{sec:scrum}
+Given that the platform is built incrementally from a set of independent but
+connected capabilities, an \textbf{Agile} approach was chosen over a classic
+sequential (waterfall) process. Agile favors short iterations, frequent working
+increments, and the ability to re-prioritize, a natural fit for a project
+whose features (auth, pipelines, registry, deployment, monitoring) can be
+delivered and demonstrated one layer at a time.
+
+Among Agile methods, \textbf{Scrum}~\cite{scrum_guide} was adopted. Scrum is an
+iterative and incremental Agile method that organizes work into fixed-length
+iterations called \emph{sprints}, each producing a potentially shippable
+increment. Figure~\ref{fig:scrum} illustrates the overall Scrum process.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.9\textwidth,keepaspectratio]{scrum}
+  \caption{The Scrum process: from product backlog to shippable increment}
+  \label{fig:scrum}
+\end{figure}
+
+\subsection{Scrum Roles}
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{\gls{po}}: Mr.\ Amine Gonji (company supervisor, INSOMEA),
+        responsible for prioritizing the product backlog.
+  \item \textbf{\gls{sm}}: Mr.\ Ben Mardes Achref (academic supervisor),
+        responsible for facilitating the process and removing impediments.
+  \item \textbf{Development Team}: the student (author), responsible for analysis,
+        design, implementation, and testing.
+\end{itemize}
+
+\subsection{Scrum Artifacts}
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{Product Backlog}: the ordered list of all desired features,
+        expressed as user stories (see Chapter~\ref{chap:requirements}).
+  \item \textbf{Sprint Backlog}: the subset of stories selected for a given
+        sprint, broken into tasks.
+  \item \textbf{Increment}: the working, demonstrable software produced at the end
+        of each sprint.
+\end{itemize}
+
+\subsection{Scrum Events}
+The project was organized into \textbf{four sprints}. Each sprint began with
+\emph{sprint planning}, proceeded with regular progress reviews, and ended with a
+\emph{sprint review} (demonstration of the increment) and a \emph{retrospective}
+(lessons learned). The detailed release plan is given in
+Chapter~\ref{chap:requirements}.
+
+% ---------------------------------------------------------------------------
+\section{Work Environment}
+\label{sec:environment}
+
+\subsection{Hardware Environment}
+% >>> USER: adjust the development-machine row to your real specs.
+\begin{table}[H]\centering
+\renewcommand{\arraystretch}{1.3}
+\caption{Hardware environment}\label{tab:hardware}
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}p{4.2cm}|X|}
+\hline
+\textbf{Component} & \textbf{Specification}\\
+\hline
+Development machine & Intel Core i7, 16\,GB RAM, Windows 11\\
+\hline
+Cloud cluster       & Azure Kubernetes Service (\gls{aks})\\
+\hline
+\end{tabularx}
+\end{table}
+
+\subsection{Software Environment and Tools}
+\begin{table}[H]\centering
+\renewcommand{\arraystretch}{1.3}
+\caption{Software tools and technologies}\label{tab:software}
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}p{4.2cm}|X|}
+\hline
+\textbf{Category} & \textbf{Tools / Technologies}\\
+\hline
+Backend             & FastAPI (Python~3.11), SQLAlchemy~2 (async), Pydantic~v2\\
+\hline
+Frontend            & Angular~19 (standalone components, signals), Tailwind~v4\\
+\hline
+Database            & PostgreSQL~16\\
+\hline
+Object storage      & MinIO (\gls{s3}-compatible)\\
+\hline
+Experiment tracking & MLflow\\
+\hline
+Orchestration       & Kubernetes (\gls{aks} / KinD), \gls{kfp}, Argo Workflows\\
+\hline
+Model serving       & KServe\\
+\hline
+Networking          & Cloudflare Tunnel (\gls{tls} termination)\\
+\hline
+CI/CD               & GitHub Actions, Azure Container Registry (\gls{acr})\\
+\hline
+Version control     & Git / GitHub\\
+\hline
+Modeling            & \gls{uml} (draw.io / PlantUML)\\
+\hline
+IDE                 & Visual Studio Code\\
+\hline
+\end{tabularx}
+\end{table}
+
+\section*{Conclusion}
+This chapter introduced the host organization, the project framework, and the
+shortcomings of the manual machine-learning workflow that motivate this work. It
+presented the proposed \gls{mlops} platform at a high level, and the Scrum
+method and tooling adopted. The next chapter establishes the technical
+background and justifies the technology choices in depth.

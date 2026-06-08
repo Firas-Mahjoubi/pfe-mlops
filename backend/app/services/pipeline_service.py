@@ -392,10 +392,49 @@ def run_custom_code(
                 print(f"[platform] protobuf re-pin failed: {_repin.stderr[-300:]}", flush=True)
                 break
 
+            # Inverse: a package needs protobuf >= 5 (`runtime_version` was
+            # added there) but we pinned to <5 for mlflow. This means a too-
+            # new tensorflow (>=2.16) is installed. Downgrade to 2.15.1 which
+            # is the last version compatible with protobuf<5.
+            if (
+                "cannot import name 'runtime_version' from 'google.protobuf'" in result.stderr
+                and "tf_downgrade" not in installed
+            ):
+                print("[platform] Detected protobuf<5 / tensorflow>=2.16 mismatch. "
+                      "Downgrading tensorflow to 2.15.1 + keras to 2.15.0...", flush=True)
+                _dg = subprocess.run(
+                    ["pip", "install", "--quiet", "--force-reinstall",
+                     "tensorflow==2.15.1", "keras==2.15.0", "protobuf>=3.20.3,<5"],
+                    capture_output=True, text=True,
+                )
+                if _dg.returncode == 0:
+                    installed.add("tf_downgrade")
+                    continue
+                print(f"[platform] tensorflow downgrade failed: {_dg.stderr[-300:]}", flush=True)
+                break
+
+            # Pin known-good versions for the heavyweight ML packages so the
+            # version pip picks doesn't break the wider dep graph. The user's
+            # 2026-06-02 TSLA notebook needed:
+            #   - tensorflow==2.15.1 (last release built against protobuf<5;
+            #     2.16+ require protobuf>=5 which breaks mlflow 2.11)
+            #   - keras==2.15.0 (matches TF 2.15; keras 3.x is incompatible
+            #     with TF 2.15 and requires TF 2.16+)
+            #   - torch and others: latest is fine, no protobuf conflict
+            VERSION_PINS = {
+                "tensorflow": "tensorflow==2.15.1",
+                "keras": "keras==2.15.0",
+                "tf-keras": "tf-keras==2.15.1",
+            }
+
             if missing and missing not in installed:
-                print(f"[platform] Auto-installing missing package: {missing}", flush=True)
+                pkg_spec = VERSION_PINS.get(missing, missing)
+                if pkg_spec != missing:
+                    print(f"[platform] Auto-installing missing package: {missing} (pinned to {pkg_spec})", flush=True)
+                else:
+                    print(f"[platform] Auto-installing missing package: {missing}", flush=True)
                 inst = subprocess.run(
-                    ["pip", "install", missing],
+                    ["pip", "install", pkg_spec],
                     capture_output=True, text=True,
                 )
                 if inst.returncode == 0:

@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.user import User
+from app.models.user import User, ROLE_ADMIN
 from app.utils.security import decode_token
 
 security = HTTPBearer()
@@ -31,3 +31,13 @@ async def get_current_user(
             detail="User not found or inactive",
         )
     return user
+
+
+async def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    """Dependency that allows only administrators through (403 otherwise)."""
+    if current_user.role != ROLE_ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Administrator privileges required",
+        )
+    return current_user

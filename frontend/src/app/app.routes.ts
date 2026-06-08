@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './core/auth/auth.guard';
+import { adminGuard } from './core/auth/admin.guard';
 import { DashboardLayoutComponent } from './shared/layouts/dashboard-layout/dashboard-layout.component';
 
 export const routes: Routes = [
@@ -22,6 +23,9 @@ export const routes: Routes = [
       { path: 'artifacts', loadComponent: () => import('./pages/data/artifacts.component').then(m => m.ArtifactsComponent) },
       { path: 'monitoring', loadComponent: () => import('./pages/data/monitoring.component').then(m => m.MonitoringComponent) },
       { path: 'runs/compare', loadComponent: () => import('./pages/runs/run-compare/run-compare.component').then(m => m.RunCompareComponent) },
+      { path: 'admin', canActivate: [adminGuard], loadComponent: () => import('./pages/admin/admin-overview.component').then(m => m.AdminOverviewComponent) },
+      { path: 'admin/users', canActivate: [adminGuard], loadComponent: () => import('./pages/admin/admin-users.component').then(m => m.AdminUsersComponent) },
+      { path: 'admin/resources', canActivate: [adminGuard], loadComponent: () => import('./pages/admin/admin-resources.component').then(m => m.AdminResourcesComponent) },
       { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
     ],
   },

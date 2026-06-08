@@ -1,0 +1,111 @@
+%==============================================================================
+%  CHAPTER 6 — SPRINT 3: MODEL REGISTRY & DEPLOYMENT
+%==============================================================================
+\chapter{Sprint 3 --- Model Registry and Deployment}
+\label{chap:sprint3}
+
+\section*{Introduction}
+The third sprint turns tracked runs into deployable assets. It adds the model
+registry with lifecycle stages, one-click deployment of a model as a live service,
+and an in-interface prediction tester.
+
+% ---------------------------------------------------------------------------
+\section{Sprint Backlog}
+\begin{table}[H]\centering
+\caption{Sprint~3 backlog}\label{tab:backlog-s3}
+\begin{tabularx}{\textwidth}{p{0.6cm} X p{2cm}}
+\toprule
+\textbf{\#} & \textbf{Task} & \textbf{Pts}\\
+\midrule
+8  & Register model versions from successful runs & 2\\
+8  & Build the model registry interface & 3\\
+9  & Promote models across Staging/Production/Archived & 3\\
+10 & Deploy a model as an InferenceService on the cluster & 5\\
+10 & Track deployment status and endpoint & 3\\
+11 & Build the in-UI prediction tester & 5\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+% ---------------------------------------------------------------------------
+\section{Analysis and Conception}
+
+\subsection{Use Cases}
+This sprint covers \emph{Register a model}, \emph{Promote a model},
+\emph{Deploy a model}, and \emph{Test predictions}.
+
+\subsection{Sequence Diagram: Deploy and Predict}
+% >>> USER: render diagrams/seq_deploy.puml -> images/seq_deploy.pdf
+\begin{figure}[H]\centering
+  % \includegraphics[width=\textwidth]{seq_deploy.pdf}
+  \fbox{\parbox[c][5.5cm][c]{\textwidth}{\centering\itshape
+    Placeholder --- insert \texttt{images/seq\_deploy.pdf}\\
+    (render \texttt{diagrams/seq\_deploy.puml})}}
+  \caption{Sequence diagram of deploying a model and requesting a prediction}
+  \label{fig:seq-deploy}
+\end{figure}
+
+\subsection{Data Model Increment}
+The sprint adds two entities: \texttt{MLModel} (registered model name, version,
+lifecycle stage) and \texttt{Deployment} (inference-service name, endpoint, status).
+
+% ---------------------------------------------------------------------------
+\section{Realization}
+
+\subsection{Model Registry and Promotion}
+Successful runs can be registered as named, versioned models. Each version carries
+a lifecycle stage, Staging, Production, or Archived, which the user changes
+from the interface. The tracking server remains the source of truth for the
+registry; the platform mirrors and controls it through its own \gls{ui}.
+
+\subsection{Deployment as an InferenceService}
+Deploying a model reduces to creating a single declarative resource on the cluster.
+The serving operator reconciles this resource into a running deployment, a service,
+and an ingress, backed by a framework-specific model server that loads the model
+artifact directly from the object store.
+
+\begin{lstlisting}[language=Python,caption={Deployment is expressed declaratively; the operator does the rest.},label={lst:isvc}]
+inference_service = {
+    "apiVersion": "serving.kserve.io/v1beta1",
+    "kind": "InferenceService",
+    "metadata": {"name": name,
+                 "annotations": {"serving.kserve.io/deploymentMode": "RawDeployment"}},
+    "spec": {"predictor": {"sklearn": {"storageUri": model_artifact_uri}}},
+}
+\end{lstlisting}
+
+\subsection{Prediction}
+The backend forwards prediction requests to the model server through the cluster's
+\gls{api}, which avoids needing a publicly-routable address for every model. The
+interface provides a tester where the user submits sample inputs and sees the
+returned predictions.
+
+\subsection{User Interface}
+% >>> USER: screenshots: registry with stage badges, deploy panel, predict tester.
+The interface shows the registry with stage badges, a deployment panel reporting
+status and endpoint, and a prediction tester.
+
+% ---------------------------------------------------------------------------
+\section{Sprint Review and Retrospective}
+At the end of Sprint~3 a user can take a tracked run all the way to a live,
+queryable model, the platform now \emph{registers, deploys, and serves}.
+\begin{figure}[H]\centering
+\begin{tikzpicture}
+\begin{axis}[
+    width=0.8\textwidth, height=6cm,
+    xlabel={Day}, ylabel={Remaining points},
+    xmin=0, xmax=11, ymin=0, ymax=22,
+    legend pos=north east, grid=both,
+]
+\addplot[dashed,gray] coordinates {(0,21)(10,0)};
+\addplot[thick,primary,mark=*] coordinates {
+  (0,21)(1,21)(2,19)(3,17)(4,14)(5,12)(6,9)(7,7)(8,4)(9,2)(10,0)};
+\legend{Ideal, Actual}
+\end{axis}
+\end{tikzpicture}
+\caption{Sprint~3 burndown chart}\label{fig:burndown-s3}
+\end{figure}
+
+\noindent\textbf{Retrospective.} % >>> USER
+Configuring the serving operator to match the cluster's ingress setup required
+careful investigation. \todo{your note}.

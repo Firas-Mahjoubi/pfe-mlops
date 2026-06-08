@@ -1,0 +1,120 @@
+%==============================================================================
+%  CHAPTER 5 — SPRINT 2: TRAINING PIPELINES & EXPERIMENT TRACKING
+%==============================================================================
+\chapter{Sprint 2 --- Training Pipelines and Experiment Tracking}
+\label{chap:sprint2}
+
+\section*{Introduction}
+The second sprint delivers the heart of the platform: uploading code and data,
+running it as an isolated training job on the cluster, and automatically capturing
+the results. This chapter follows the same structure as the previous one.
+
+% ---------------------------------------------------------------------------
+\section{Sprint Backlog}
+\begin{table}[H]\centering
+\caption{Sprint~2 backlog}\label{tab:backlog-s2}
+\begin{tabularx}{\textwidth}{p{0.6cm} X p{2cm}}
+\toprule
+\textbf{\#} & \textbf{Task} & \textbf{Pts}\\
+\midrule
+3 & Upload code/dataset to object storage & 3\\
+3 & Auto-detect the entry script in an upload & 2\\
+4 & Build the training pipeline (download $\to$ run $\to$ autolog) & 5\\
+4 & Convert notebooks to scripts and inject the autolog wrapper & 3\\
+5 & Enable automatic capture of metrics, parameters, artifacts & 3\\
+6 & Stream live pipeline logs to the UI & 3\\
+7 & Build the experiments browsing interface & 3\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+% ---------------------------------------------------------------------------
+\section{Analysis and Conception}
+
+\subsection{Use Cases}
+This sprint covers \emph{Upload code and data}, \emph{Trigger a training run},
+\emph{Watch live logs}, and \emph{Browse experiment runs}.
+
+\subsection{Sequence Diagram: Triggering a Training Run}
+% >>> USER: render diagrams/seq_training.puml -> images/seq_training.pdf
+\begin{figure}[H]\centering
+  % \includegraphics[width=\textwidth]{seq_training.pdf}
+  \fbox{\parbox[c][5.5cm][c]{\textwidth}{\centering\itshape
+    Placeholder --- insert \texttt{images/seq\_training.pdf}\\
+    (render \texttt{diagrams/seq\_training.puml})}}
+  \caption{Sequence diagram of triggering a custom-code training run}
+  \label{fig:seq-training}
+\end{figure}
+
+\subsection{Data Model Increment}
+The sprint adds the \texttt{PipelineRun} entity (pipeline run identifier, status,
+parameters, timestamps) linked to a project.
+
+% ---------------------------------------------------------------------------
+\section{Realization}
+
+\subsection{Upload and Storage}
+Uploaded files are stored in the object store under a key derived from the project
+and a short unique prefix. The backend supports plain scripts, notebooks, and
+archives, and can auto-detect the entry script when one is not specified, following
+a fixed priority order.
+
+\subsection{The Training Pipeline}
+A training run is expressed as a small pipeline that executes inside an isolated
+pod: it downloads the code (and dataset) from the object store, installs any
+missing dependencies, and runs the entry script. Notebooks are first converted to
+a Python script. The script is not run directly, it is wrapped by a generated
+runner that enables automatic experiment tracking before handing control to the
+user's code.
+
+\begin{lstlisting}[language=Python,caption={The generated runner enables autologging before running the user's script.},label={lst:runner}]
+import os, runpy, mlflow
+mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
+mlflow.set_experiment(experiment_id=os.environ["MLFLOW_EXPERIMENT_ID"])
+mlflow.autolog(log_models=True)          # one line instruments sklearn/XGBoost/...
+runpy.run_path("user_script.py", run_name="__main__")
+\end{lstlisting}
+
+\subsection{Robust Notebook Handling}
+Because real-world notebooks are rarely written for headless execution, the runner
+includes several robustness measures: it strips interactive notebook magics during
+conversion, neutralizes blocking calls, and provides compatibility shims for
+runtime-only modules so that code exported from cloud notebook environments runs
+unchanged.
+
+\subsection{Live Logs}
+While a run executes, the backend reads the pod's logs from the cluster and streams
+them to the interface, so the user watches training progress in real time. The
+\texttt{autolog} call records metrics, parameters, and artifacts to the tracking
+server with no changes to the user's code.
+
+\subsection{User Interface}
+% >>> USER: screenshots: upload view, live-log terminal, experiments list.
+The interface offers a drag-and-drop upload area, a live log terminal, and an
+experiments view listing each run with its captured metrics.
+
+% ---------------------------------------------------------------------------
+\section{Sprint Review and Retrospective}
+At the end of Sprint~2 a user can upload arbitrary code, run it on the cluster, and
+see metrics and artifacts captured automatically, the platform now \emph{trains
+and tracks}.
+\begin{figure}[H]\centering
+\begin{tikzpicture}
+\begin{axis}[
+    width=0.8\textwidth, height=6cm,
+    xlabel={Day}, ylabel={Remaining points},
+    xmin=0, xmax=12, ymin=0, ymax=24,
+    legend pos=north east, grid=both,
+]
+\addplot[dashed,gray] coordinates {(0,22)(11,0)};
+\addplot[thick,primary,mark=*] coordinates {
+  (0,22)(1,22)(2,20)(3,18)(4,16)(5,13)(6,11)(7,9)(8,7)(9,4)(10,2)(11,0)};
+\legend{Ideal, Actual}
+\end{axis}
+\end{tikzpicture}
+\caption{Sprint~2 burndown chart}\label{fig:burndown-s2}
+\end{figure}
+
+\noindent\textbf{Retrospective.} % >>> USER
+The training and tracking pipeline was the most technically demanding increment;
+handling messy real-world notebooks required extra robustness work. \todo{your note}.

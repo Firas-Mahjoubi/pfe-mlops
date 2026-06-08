@@ -1,0 +1,30 @@
+# LaTeX build output
+build/
+main.pdf
+
+# NOTE: figures in images/ (including *.pdf diagrams) are intentionally tracked.
+
+# LaTeX aux files (in case any land outside build/)
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.lof
+*.log
+*.lot
+*.out
+*.run.xml
+*.synctex.gz
+*.toc
+*.acn
+*.acr
+*.alg
+*.glg
+*.glo
+*.gls
+*.ist
+*.nav
+*.snm
+*.vrb

@@ -1,0 +1,26 @@
+@startuml seq_deploy
+' Render to ../images/seq_deploy.pdf
+actor User
+participant "Angular SPA" as FE
+participant "FastAPI Backend" as BE
+participant "KServe Operator" as KS
+participant "Model Server Pod" as MS
+database "Object Store\n(MinIO)" as S3
+
+== Deploy ==
+User -> FE : click "Deploy" on a registered model
+FE -> BE : POST /api/v1/deployments
+BE -> KS : create InferenceService (RawDeployment)
+KS -> MS : create Deployment + Service + Ingress
+MS -> S3 : load model artifact (storageUri)
+MS --> KS : ready
+BE --> FE : deployment status + endpoint
+
+== Predict ==
+User -> FE : submit sample inputs
+FE -> BE : POST /api/v1/deployments/{id}/predict
+BE -> MS : forward via cluster API proxy
+MS --> BE : predictions
+BE --> FE : predictions
+FE --> User : show result
+@enduml

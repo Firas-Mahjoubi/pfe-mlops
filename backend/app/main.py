@@ -17,6 +17,28 @@ async def lifespan(app: FastAPI):
     if os.getenv("RUN_CREATE_ALL", "1") == "1":
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+
+    # Lightweight, idempotent migration + admin bootstrap. create_all() never
+    # ALTERs an existing table, so the `role` column is added explicitly here;
+    # then any email in ADMIN_EMAILS is promoted to admin.
+    from sqlalchemy import text
+    async with engine.begin() as conn:
+        try:
+            await conn.execute(text(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS "
+                "role VARCHAR(20) NOT NULL DEFAULT 'user'"
+            ))
+        except Exception:  # noqa: BLE001 -- already present / non-Postgres backend
+            pass
+        admin_emails = settings.admin_emails_list
+        if admin_emails:
+            try:
+                await conn.execute(
+                    text("UPDATE users SET role='admin' WHERE lower(email) = ANY(:emails)"),
+                    {"emails": admin_emails},
+                )
+            except Exception:  # noqa: BLE001
+                pass
     yield
     await engine.dispose()
 

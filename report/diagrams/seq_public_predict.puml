@@ -1,0 +1,21 @@
+@startuml seq_public_predict
+' Render to ../images/seq_public_predict.pdf
+actor "External API Client" as Client
+participant "Public Endpoint\n/api/public/predict" as PUB
+participant "FastAPI Backend" as BE
+database "PostgreSQL" as DB
+participant "Model Server Pod" as MS
+
+Client -> PUB : POST /api/public/predict/{deployment_id}\nAuthorization: Bearer mlops_xxx
+PUB -> BE : validate request
+BE -> BE : sha256(key)
+BE -> DB : find active key by hash + deployment
+alt valid & not revoked & deployment ready
+  DB --> BE : api_key
+  BE -> MS : forward prediction request
+  MS --> BE : predictions
+  BE --> Client : 200 {predictions}
+else invalid / revoked
+  BE --> Client : 401 Unauthorized
+end
+@enduml

@@ -3,8 +3,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
+from app.config import settings
 from app.database import get_db
-from app.models.user import User
+from app.models.user import User, ROLE_ADMIN
 from app.schemas.auth import (
     LoginRequest,
     RefreshRequest,
@@ -36,6 +37,7 @@ async def signup(body: SignupRequest, db: AsyncSession = Depends(get_db)):
         email=body.email,
         hashed_password=hash_password(body.password),
         full_name=body.full_name,
+        role=ROLE_ADMIN if body.email.lower() in settings.admin_emails_list else "user",
     )
     db.add(user)
     await db.commit()
@@ -57,6 +59,11 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
         )
+
+    # Promote on login if this email was added to ADMIN_EMAILS after signup.
+    if user.email.lower() in settings.admin_emails_list and user.role != ROLE_ADMIN:
+        user.role = ROLE_ADMIN
+        await db.commit()
 
     return TokenResponse(
         access_token=create_access_token(user.id),

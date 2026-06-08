@@ -33,11 +33,19 @@ class Settings(BaseSettings):
     # Local dev defaults; override via env (CORS_ORIGINS) in prod.
     CORS_ORIGINS: str = "http://localhost:4200,http://localhost:30420"
 
+    # Administrators — comma-separated list of emails that should be granted the
+    # admin role. Applied on startup and on signup/login.
+    ADMIN_EMAILS: str = ""
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+
+    @property
+    def admin_emails_list(self) -> list[str]:
+        return [e.strip().lower() for e in self.ADMIN_EMAILS.split(",") if e.strip()]
 
 
 settings = Settings()

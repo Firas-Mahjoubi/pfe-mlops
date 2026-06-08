@@ -1,0 +1,24 @@
+@startuml seq_training
+' Render to ../images/seq_training.pdf
+actor User
+participant "Angular SPA" as FE
+participant "FastAPI Backend" as BE
+participant "Pipeline Orchestrator\n(KFP/Argo)" as KFP
+participant "Training Pod" as POD
+database "Object Store\n(MinIO)" as S3
+participant "MLflow" as ML
+
+User -> FE : click "Run code"
+FE -> BE : POST /api/v1/pipelines/trigger-custom
+BE -> KFP : submit training pipeline
+KFP -> POD : schedule isolated pod
+POD -> S3 : download code + dataset
+POD -> POD : convert notebook, inject autolog runner
+POD -> POD : install missing dependencies
+POD -> POD : run user script
+POD -> ML : autolog metrics / params / artifacts
+POD --> KFP : exit status
+BE -> KFP : poll run status
+BE --> FE : status + live logs
+FE --> User : show progress and results
+@enduml

@@ -1,0 +1,43 @@
+@startuml architecture
+' Deployment / architecture view. Prefer redrawing in draw.io for the final
+' figure, but this gives a faithful starting point. Render to ../images/architecture.pdf
+skinparam shadowing false
+skinparam rectangle {
+  BackgroundColor #F5F7FA
+  BorderColor #0B5394
+}
+
+actor "User Browser" as Browser
+cloud "Cloudflare Edge\n(TLS termination)" as CF
+
+node "Azure Kubernetes Service (namespace: mlops)" as AKS {
+  rectangle "cloudflared\n(tunnel agent)" as CFD
+  rectangle "Frontend\n(Angular SPA, NGINX)" as FE
+  rectangle "Backend\n(FastAPI)" as BE
+  rectangle "KServe predictor pods\n(per model)" as KS
+  database "PostgreSQL" as PG
+  rectangle "MinIO\n(object store)" as MINIO
+  rectangle "MLflow\n(tracking)" as ML
+  rectangle "KFP / Argo\n(kubeflow ns)" as KFP
+}
+
+cloud "External (CI/CD)" as EXT {
+  rectangle "GitHub Actions" as GH
+  rectangle "Azure Container Registry" as ACR
+}
+
+Browser --> CF : HTTPS
+CF --> CFD : outbound QUIC tunnel
+CFD --> FE
+FE --> BE
+BE --> PG
+BE --> MINIO
+BE --> ML
+BE --> KFP
+BE --> KS : predict (API proxy)
+ML --> PG
+ML --> MINIO
+KFP --> MINIO
+GH --> ACR : build & push images
+ACR --> AKS : pull images
+@enduml

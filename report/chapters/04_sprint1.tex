@@ -1,0 +1,124 @@
+%==============================================================================
+%  CHAPTER 4 — SPRINT 1: FOUNDATION (AUTHENTICATION & PROJECT MANAGEMENT)
+%==============================================================================
+\chapter{Sprint 1 --- Foundation: Authentication and Project Management}
+\label{chap:sprint1}
+
+\section*{Introduction}
+The first sprint lays the foundation of the platform: a secure authentication
+system and the project entity around which all later work is organized. This
+chapter presents the sprint backlog, the analysis and conception, the realization,
+and the sprint review.
+
+% ---------------------------------------------------------------------------
+\section{Sprint Backlog}
+\begin{table}[H]\centering
+\caption{Sprint~1 backlog}\label{tab:backlog-s1}
+\begin{tabularx}{\textwidth}{p{0.6cm} X p{2cm}}
+\toprule
+\textbf{\#} & \textbf{Task} & \textbf{Pts}\\
+\midrule
+1 & Design the user and project data model & 2\\
+1 & Implement signup / login / refresh with JWT & 3\\
+1 & Build the login and signup user interface & 2\\
+2 & Implement project CRUD with ownership checks & 3\\
+2 & Bind each project to its own tracking experiment & 1\\
+2 & Build the projects list and detail interface & 2\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+% ---------------------------------------------------------------------------
+\section{Analysis and Conception}
+
+\subsection{Use Cases}
+This sprint covers \emph{Sign up}, \emph{Sign in}, \emph{Refresh session}, and
+\emph{Manage projects} (create, list, update, delete).
+
+\subsection{Sequence Diagram: Authentication}
+% >>> USER: render diagrams/seq_login.puml -> images/seq_login.pdf
+\begin{figure}[H]\centering
+  % \includegraphics[width=0.85\textwidth]{seq_login.pdf}
+  \fbox{\parbox[c][5cm][c]{0.85\textwidth}{\centering\itshape
+    Placeholder --- insert \texttt{images/seq\_login.pdf}\\
+    (render \texttt{diagrams/seq\_login.puml})}}
+  \caption{Sequence diagram of the login flow}
+  \label{fig:seq-login}
+\end{figure}
+
+\subsection{Data Model Increment}
+The sprint introduces two entities: \texttt{User} (unique email, hashed password,
+full name) and \texttt{Project} (name, owner reference, tracking-experiment
+identifier).
+% >>> USER: render diagrams/class_sprint1.puml -> images/class_sprint1.pdf
+\begin{figure}[H]\centering
+  % \includegraphics[width=0.6\textwidth]{class_sprint1.pdf}
+  \fbox{\parbox[c][4cm][c]{0.6\textwidth}{\centering\itshape
+    Placeholder --- \texttt{images/class\_sprint1.pdf}}}
+  \caption{Class diagram increment after Sprint~1}
+  \label{fig:class-s1}
+\end{figure}
+
+% ---------------------------------------------------------------------------
+\section{Realization}
+
+\subsection{Authentication with JWT}
+Authentication is stateless and based on \gls{jwt}. On login, the backend verifies
+the password against its stored hash and issues a short-lived \emph{access} token
+and a longer-lived \emph{refresh} token. Protected endpoints depend on a function
+that decodes the access token and resolves the current user; the refresh endpoint
+exchanges a valid refresh token for a new access token without re-entering
+credentials. Passwords are never stored in clear text, only a salted hash is
+persisted.
+
+\begin{lstlisting}[language=Python,caption={Resolving the current user from a JWT (backend dependency).},label={lst:get-current-user}]
+async def get_current_user(token: str = Depends(oauth2_scheme),
+                           db: AsyncSession = Depends(get_db)) -> User:
+    payload = decode_access_token(token)        # raises 401 if invalid/expired
+    user = await db.get(User, payload["sub"])
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    return user
+\end{lstlisting}
+
+\subsection{Project Management}
+A project is the organizing unit of the platform. Creating one also provisions a
+dedicated experiment in the tracking server, so that every run under the project
+is grouped automatically. All project endpoints enforce an ownership check: a user
+can only see and modify their own projects.
+
+\subsection{User Interface}
+% >>> USER: add screenshots to images/ (login + projects list) and uncomment.
+% \begin{figure}[H]\centering
+%   \includegraphics[width=\textwidth]{screenshot_login.png}
+%   \caption{Login screen}\label{fig:ui-login}
+% \end{figure}
+The frontend provides a login/signup screen and a projects view from which the
+user creates and opens projects.
+
+% ---------------------------------------------------------------------------
+\section{Sprint Review and Retrospective}
+At the end of Sprint~1 the platform supports secure authentication and full
+project management, the foundation every later sprint builds upon. The burndown
+chart below tracks remaining effort across the sprint.
+% >>> USER: replace the y-values with your real remaining points per day.
+\begin{figure}[H]\centering
+\begin{tikzpicture}
+\begin{axis}[
+    width=0.8\textwidth, height=6cm,
+    xlabel={Day}, ylabel={Remaining points},
+    xmin=0, xmax=10, ymin=0, ymax=14,
+    legend pos=north east, grid=both,
+]
+\addplot[dashed,gray] coordinates {(0,13)(9,0)};         % ideal
+\addplot[thick,primary,mark=*] coordinates {              % actual
+  (0,13)(1,13)(2,11)(3,9)(4,8)(5,6)(6,5)(7,3)(8,1)(9,0)};
+\legend{Ideal, Actual}
+\end{axis}
+\end{tikzpicture}
+\caption{Sprint~1 burndown chart}\label{fig:burndown-s1}
+\end{figure}
+
+\noindent\textbf{Retrospective.} % >>> USER: 2--3 lines of what went well / to improve.
+What went well: the authentication and project foundations were delivered on
+schedule. To improve: \todo{your note}.

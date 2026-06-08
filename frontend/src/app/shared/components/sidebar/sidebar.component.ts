@@ -125,6 +125,29 @@ interface ResourceMini {
             }
           </a>
         }
+
+        @if (user?.role === 'admin') {
+          <div class="px-2 pt-5 pb-1.5 text-[10px] font-semibold tracking-[0.12em] text-ink3 uppercase">Administration</div>
+          @for (a of adminNav; track a.route) {
+            <a
+              [routerLink]="a.route"
+              routerLinkActive
+              #arla="routerLinkActive"
+              [routerLinkActiveOptions]="{ exact: a.route === '/admin' }"
+              (click)="mobileNav.close()"
+              class="relative w-full h-8 px-2 rounded-md flex items-center gap-2.5 text-[13px] transition-colors duration-150"
+              [class]="arla.isActive ? 'bg-cyan3/10 text-ink' : 'text-ink2 hover:text-ink hover:bg-white/[0.03]'"
+            >
+              <span class="w-[15px] h-[15px] flex items-center justify-center">
+                <span [class]="'w-1 h-1 rounded-full ' + (arla.isActive ? 'bg-cyan3' : 'bg-ink3')"></span>
+              </span>
+              <span class="flex-1 text-left">{{ a.label }}</span>
+              @if (arla.isActive) {
+                <span class="absolute -left-2 w-[2px] h-5 bg-cyan3 rounded-r"></span>
+              }
+            </a>
+          }
+        }
       </nav>
 
       <!-- cluster footer -->
@@ -196,6 +219,12 @@ export class SidebarComponent implements OnInit, OnDestroy {
     { label: 'Datasets',      route: '/datasets' },
     { label: 'Artifacts',     route: '/artifacts' },
     { label: 'Monitoring',    route: '/monitoring' },
+  ];
+
+  adminNav: SubNavItem[] = [
+    { label: 'Overview',  route: '/admin' },
+    { label: 'Users',     route: '/admin/users' },
+    { label: 'Resources', route: '/admin/resources' },
   ];
 
   resources: ResourceMini[] = [

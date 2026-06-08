@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { BehaviorSubject, Observable, tap } from 'rxjs';
+import { BehaviorSubject, Observable, of, tap, catchError } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { TokenService } from './token.service';
 import { User, TokenResponse, LoginRequest, SignupRequest } from '../models/user.model';
@@ -51,5 +51,16 @@ export class AuthService {
 
   get currentUser(): User | null {
     return this.currentUserSubject.value;
+  }
+
+  /** Resolve the current user, fetching /auth/me once if not yet loaded.
+   *  Used by route guards that need the role before the layout has loaded it. */
+  ensureCurrentUser(): Observable<User | null> {
+    if (this.currentUserSubject.value) return of(this.currentUserSubject.value);
+    if (!this.tokenService.isLoggedIn()) return of(null);
+    return this.http.get<User>(`${this.apiUrl}/auth/me`).pipe(
+      tap((u) => this.currentUserSubject.next(u)),
+      catchError(() => of(null)),
+    );
   }
 }

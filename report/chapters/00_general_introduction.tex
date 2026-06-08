@@ -1,0 +1,57 @@
+%==============================================================================
+%  GENERAL INTRODUCTION  (~1.5 pages, unnumbered chapter)
+%==============================================================================
+\chapter*{General Introduction}
+\addcontentsline{toc}{chapter}{General Introduction}
+\markboth{General Introduction}{General Introduction}
+
+Machine learning has moved from research notebooks into the core of modern
+software products. Yet the gap between \emph{training a model that works on a
+laptop} and \emph{running that model reliably in production} remains one of the
+hardest problems in the field. Studies have repeatedly shown that only a small
+fraction of the effort in a real machine-learning system goes into the model
+itself; the overwhelming majority is spent on data plumbing, configuration,
+reproducibility, deployment, and monitoring~\cite{sculley2015hidden}. The
+discipline that addresses this gap is \gls{mlops}, the application of
+\gls{devops} principles to the machine-learning lifecycle.
+
+In most teams, the path from experiment to deployed model is still manual and
+fragile. Data scientists train models in notebooks, track results in
+spreadsheets or not at all, and hand artifacts to engineers who deploy them
+through ad-hoc scripts. The consequences are familiar: experiments that cannot
+be reproduced, the recurring ``it works on my machine'' failure, and slow,
+error-prone deployments. A unified platform that automates this lifecycle ---
+training, experiment tracking, model registry, deployment, and monitoring ---
+removes this friction and lets teams ship models with confidence.
+
+This report presents the design and implementation of such a platform: an
+end-to-end, self-hosted \gls{mlops} system carried out as an end-of-studies
+project (PFE) within \textbf{INSOMEA}. The platform lets a user upload code and
+data through a web interface, trigger a training pipeline that runs on a
+\gls{k8s} cluster, automatically capture metrics and artifacts, register and
+promote model versions, and deploy a chosen model as a live prediction service
+, all from a single application, with continuous deployment to a public URL.
+
+% ---- roadmap ---------------------------------------------------------------
+The remainder of this report is organized as follows:
+
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{Chapter~1, General Context} introduces the host organization,
+        studies the existing situation and its limitations, states the problem,
+        outlines the proposed solution, and presents the Scrum method and
+        work environment adopted for the project.
+  \item \textbf{Chapter~2, MLOps Background and Technology Foundations}
+        defines the \gls{mlops} discipline, its core challenges, the enabling
+        technologies used in this work, and positions the project against
+        existing commercial solutions.
+  \item \textbf{Chapter~3, Requirements Analysis and Project Planning}
+        specifies the functional and non-functional requirements, presents the
+        global use-case model, the product backlog, the release plan over four
+        sprints, and the global system architecture.
+  \item \textbf{Chapters~4 to~7} each document one sprint, following the same
+        structure: sprint backlog, analysis and conception, realization, and
+        sprint review.
+  \item \textbf{General Conclusion} summarizes the results achieved, the skills
+        gained, the limitations of the current system, and directions for future
+        work.
+\end{itemize}

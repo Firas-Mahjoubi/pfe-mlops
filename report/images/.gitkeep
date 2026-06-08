@@ -1,0 +1,13 @@
+Place all figures here (PDF preferred for diagrams, PNG for screenshots).
+
+Expected filenames referenced by the chapters:
+  architecture.pdf            (Chapter 3)  - redraw in draw.io
+  usecase_global.pdf          (Chapter 3)  - render diagrams/usecase_global.puml
+  ml_lifecycle.pdf            (Chapter 2)  - optional simple loop figure
+  seq_login.pdf               (Chapter 4)
+  class_sprint1.pdf           (Chapter 4)  - subset of class_domain.puml
+  seq_training.pdf            (Chapter 5)
+  seq_deploy.pdf              (Chapter 6)
+  seq_public_predict.pdf      (Chapter 7)
+  insomea_orgchart.pdf        (Chapter 1)
+  screenshot_*.png            (per sprint - UI evidence)

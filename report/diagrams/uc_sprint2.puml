@@ -1,0 +1,23 @@
+@startuml uc_sprint2
+' Render to ../images/uc_sprint2.pdf
+left to right direction
+skinparam packageStyle rectangle
+skinparam shadowing false
+
+actor "Platform User\n(Data Scientist)" as User
+
+rectangle "Sprint 2 --- Training \& Tracking" {
+  usecase "Upload code & dataset" as UC1
+  usecase "Trigger training run"  as UC2
+  usecase "Watch live logs"       as UC3
+  usecase "Browse experiments"    as UC4
+}
+
+User --> UC1
+User --> UC2
+User --> UC3
+User --> UC4
+
+UC2 ..> UC1 : <<include>>
+UC3 ..> UC2 : <<extend>>
+@enduml

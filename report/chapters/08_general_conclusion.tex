@@ -29,6 +29,22 @@ The whole system is containerized, runs identically on a local cluster and on
 \gls{aks}, and is continuously deployed to a public URL through an automated
 \gls{cicd} pipeline.
 
+Measured against the \gls{mlops} maturity levels presented in
+Chapter~\ref{chap:context}, the platform lifts its users from a fully manual
+level~0 workflow to an automated level~1: training is a repeatable pipeline,
+every experiment is tracked, models are versioned in a registry, and deployment
+is a reproducible, one-click operation. The application itself is built and
+delivered at level~2, through a fully automated \gls{cicd} chain.
+
+\section*{Contribution to the Host Organization}
+For INSOMEA, the project delivers more than a prototype: it is a working,
+self-hosted reference implementation of an \gls{mlops} stack on Azure, the
+company's core cloud platform. It can serve as a demonstrator for clients
+evaluating machine-learning industrialization, as a starting point for client
+engagements that require an on-premises or sovereignty-constrained alternative to
+managed services, and as an internal training ground for the cloud engineering
+team on Kubernetes-native machine-learning tooling.
+
 \section*{Skills Gained}
 The project was an opportunity to develop both technical and methodological
 skills: container orchestration with Kubernetes; the \gls{mlops} toolchain
@@ -48,13 +64,19 @@ production hardening effort would begin.
 Several directions would extend the platform:
 \begin{itemize}[leftmargin=1.4em]
   \item \textbf{Multi-tenancy} with organizations, teams, and role-based access
-        control;
-  \item \textbf{\gls{gpu} scheduling} for deep-learning workloads;
+        control, turning the single-tenant platform into a shared service;
+  \item \textbf{\gls{gpu} scheduling} for deep-learning workloads, by extending
+        the pipeline's pod specification with \gls{gpu} resource requests and
+        node selectors;
   \item \textbf{model monitoring}, prediction logging, data and concept drift
-        detection, and alerting;
+        detection, and alerting, which would close the loop toward automatic
+        retraining and full level~2 maturity;
   \item \textbf{autoscaling} of model servers based on traffic, and
         \textbf{A/B testing} or canary releases between model versions;
-  \item \textbf{rate limiting and quotas} on the public \gls{api}.
+  \item \textbf{rate limiting and quotas} on the public \gls{api};
+  \item \textbf{a curated training base image} with pre-pinned versions of the
+        most common machine-learning packages, eliminating the dependency
+        conflicts that proved the most frequent cause of failed runs.
 \end{itemize}
 
 In conclusion, the project resulted in a functional, end-to-end \gls{mlops}

@@ -1,56 +1,120 @@
 %==============================================================================
-%  CHAPTER 6 — SPRINT 3: MODEL REGISTRY & DEPLOYMENT
+%  CHAPTER 5 — STUDY AND IMPLEMENTATION OF SPRINT 3
 %==============================================================================
-\chapter{Sprint 3 --- Model Registry and Deployment}
+\chapter{Study and Implementation of Sprint 3}
 \label{chap:sprint3}
 
 \section*{Introduction}
-The third sprint turns tracked runs into deployable assets. It adds the model
-registry with lifecycle stages, one-click deployment of a model as a live service,
-and an in-interface prediction tester.
+The third sprint, \emph{Model Registry and Deployment}, turns tracked runs into
+deployable assets. It adds the model registry with lifecycle stages, one-click
+deployment of a model as a live service, and an in-interface prediction tester.
 
 % ---------------------------------------------------------------------------
 \section{Sprint Backlog}
 \begin{table}[H]\centering
+\renewcommand{\arraystretch}{1.25}
 \caption{Sprint~3 backlog}\label{tab:backlog-s3}
-\begin{tabularx}{\textwidth}{p{0.6cm} X p{2cm}}
-\toprule
+\begin{tabularx}{\textwidth}{|c|X|c|}
+\hline
 \textbf{\#} & \textbf{Task} & \textbf{Pts}\\
-\midrule
-8  & Register model versions from successful runs & 2\\
-8  & Build the model registry interface & 3\\
-9  & Promote models across Staging/Production/Archived & 3\\
-10 & Deploy a model as an InferenceService on the cluster & 5\\
-10 & Track deployment status and endpoint & 3\\
-11 & Build the in-UI prediction tester & 5\\
-\bottomrule
+\hline
+8  & Register model versions from successful runs & 2\\ \hline
+8  & Build the model registry interface & 3\\ \hline
+9  & Promote models across Staging/Production/Archived & 3\\ \hline
+10 & Deploy a model as an InferenceService on the cluster & 5\\ \hline
+10 & Track deployment status and endpoint & 3\\ \hline
+11 & Build the in-UI prediction tester & 5\\ \hline
 \end{tabularx}
 \end{table}
 
 % ---------------------------------------------------------------------------
-\section{Analysis and Conception}
+\section{Analysis and Functional Specification}
 
-\subsection{Use Cases}
+\subsection{Use Case Diagram of Sprint 3}
 This sprint covers \emph{Register a model}, \emph{Promote a model},
-\emph{Deploy a model}, and \emph{Test predictions}.
-
-\subsection{Sequence Diagram: Deploy and Predict}
-% >>> USER: render diagrams/seq_deploy.puml -> images/seq_deploy.pdf
+\emph{Deploy a model}, and \emph{Test predictions}. Figure~\ref{fig:uc-s3} shows
+the use-case diagram.
 \begin{figure}[H]\centering
-  % \includegraphics[width=\textwidth]{seq_deploy.pdf}
-  \fbox{\parbox[c][5.5cm][c]{\textwidth}{\centering\itshape
-    Placeholder --- insert \texttt{images/seq\_deploy.pdf}\\
-    (render \texttt{diagrams/seq\_deploy.puml})}}
+  \includegraphics[width=0.9\textwidth,height=0.72\textheight,keepaspectratio]{uc_sprint3}
+  \caption{Use-case diagram of Sprint~3}
+  \label{fig:uc-s3}
+\end{figure}
+
+\subsection{Use Case Refinement of Sprint 3}
+Tables~\ref{tab:uc-deploy} and~\ref{tab:uc-promote} refine the \emph{Deploy a
+model} and \emph{Promote a model} use cases.
+\begin{table}[H]\centering
+\renewcommand{\arraystretch}{1.3}
+\caption{Textual description of the ``Deploy a model'' use case}\label{tab:uc-deploy}
+\begin{tabularx}{\textwidth}{|>{\bfseries}p{3.2cm}|X|}
+\hline
+Use case & Deploy a model\\ \hline
+Actor & Platform user\\ \hline
+Precondition & A model version is registered in the registry.\\ \hline
+Post-condition & A live prediction service is running and reachable on the cluster.\\ \hline
+Nominal scenario & 1.~The user clicks ``Deploy'' on a registered model.\newline 2.~The backend creates an \texttt{InferenceService} resource.\newline 3.~The serving operator reconciles it into a Deployment, Service, and Ingress.\newline 4.~The model server loads the artifact from object storage.\newline 5.~The deployment status and endpoint are reported back to the user.\\ \hline
+Exceptions & The service fails to become ready: the deployment is marked failed and the user is notified.\\ \hline
+\end{tabularx}
+\end{table}
+
+\begin{table}[H]\centering
+\renewcommand{\arraystretch}{1.3}
+\caption{Textual description of the ``Promote a model'' use case}\label{tab:uc-promote}
+\begin{tabularx}{\textwidth}{|>{\bfseries}p{3.2cm}|X|}
+\hline
+Use case & Promote a model\\ \hline
+Actor & Platform user\\ \hline
+Precondition & A model version is registered in the registry.\\ \hline
+Post-condition & The model version carries its new lifecycle stage in both the registry and the platform.\\ \hline
+Nominal scenario & 1.~The user selects a target stage (Staging, Production, or Archived).\newline 2.~The system transitions the version in the model registry.\newline 3.~The system mirrors the new stage in its own database.\newline 4.~The stage badge updates in the interface.\\ \hline
+Exceptions & The registry is unreachable: no partial state is written and the user is informed.\\ \hline
+\end{tabularx}
+\end{table}
+
+% ---------------------------------------------------------------------------
+\section{Design}
+This sprint adds two entities, described in Table~\ref{tab:entities-s3}:
+\texttt{MLModel}, the platform's mirror of a registered model version, and
+\texttt{Deployment}, the record of a model running as a live service.
+
+\begin{table}[H]\centering
+\renewcommand{\arraystretch}{1.25}
+\caption{Entities introduced in Sprint~3}\label{tab:entities-s3}
+\begin{tabularx}{\textwidth}{|l|l|X|}
+\hline
+\textbf{Entity} & \textbf{Attribute} & \textbf{Description}\\
+\hline
+\multirow{4}{*}{\texttt{MLModel}}
+ & id & Unique identifier (primary key)\\ \cline{2-3}
+ & project\_id & Reference to the owning \texttt{Project}\\ \cline{2-3}
+ & name, version & Registered model name and version number\\ \cline{2-3}
+ & stage & Staging, Production, or Archived\\
+\hline
+\multirow{4}{*}{\texttt{Deployment}}
+ & id & Unique identifier (primary key)\\ \cline{2-3}
+ & model\_id & Reference to the deployed \texttt{MLModel}\\ \cline{2-3}
+ & inference\_service\_name & Name of the cluster resource\\ \cline{2-3}
+ & status, endpoint & Readiness state and prediction \gls{url}\\
+\hline
+\end{tabularx}
+\end{table}
+
+\subsection{Sequence Diagrams}
+Figure~\ref{fig:seq-promote} details the promotion flow, and
+Figure~\ref{fig:seq-deploy} the deploy-and-predict flow.
+\begin{figure}[H]\centering
+  \includegraphics[width=0.9\textwidth,height=0.62\textheight,keepaspectratio]{seq_promote}
+  \caption{Sequence diagram of promoting a model version}
+  \label{fig:seq-promote}
+\end{figure}
+\begin{figure}[H]\centering
+  \includegraphics[width=0.9\textwidth,height=0.62\textheight,keepaspectratio]{seq_deploy}
   \caption{Sequence diagram of deploying a model and requesting a prediction}
   \label{fig:seq-deploy}
 \end{figure}
 
-\subsection{Data Model Increment}
-The sprint adds two entities: \texttt{MLModel} (registered model name, version,
-lifecycle stage) and \texttt{Deployment} (inference-service name, endpoint, status).
-
 % ---------------------------------------------------------------------------
-\section{Realization}
+\section{Implementation}
 
 \subsection{Model Registry and Promotion}
 Successful runs can be registered as named, versioned models. Each version carries
@@ -74,6 +138,21 @@ inference_service = {
 }
 \end{lstlisting}
 
+\subsection{Deployment Status Tracking}
+An \texttt{InferenceService} does not become ready instantly: the operator must
+create the deployment, the model server must start, and the artifact must be
+downloaded from object storage. The backend therefore polls the resource's status
+conditions and updates the \texttt{Deployment} row as the service progresses,
+so the interface always reflects the real state of the cluster.
+
+\begin{lstlisting}[language=Python,caption={Reading readiness from the InferenceService status conditions.},label={lst:isvc-status}]
+def isvc_status(isvc: dict) -> str:
+    for cond in isvc.get("status", {}).get("conditions", []):
+        if cond["type"] == "Ready":
+            return "READY" if cond["status"] == "True" else "PENDING"
+    return "PENDING"
+\end{lstlisting}
+
 \subsection{Prediction}
 The backend forwards prediction requests to the model server through the cluster's
 \gls{api}, which avoids needing a publicly-routable address for every model. The
@@ -81,12 +160,35 @@ interface provides a tester where the user submits sample inputs and sees the
 returned predictions.
 
 \subsection{User Interface}
-% >>> USER: screenshots: registry with stage badges, deploy panel, predict tester.
 The interface shows the registry with stage badges, a deployment panel reporting
-status and endpoint, and a prediction tester.
+status and endpoint, and a prediction tester
+(Figures~\ref{fig:screen_registry} to~\ref{fig:screen_predict}).
+\screenshot{screen_registry}{Model registry with lifecycle stage badges}
+\screenshot{screen_deploy}{Deployment panel reporting status and endpoint}
+\screenshot{screen_predict}{In-interface prediction tester}
 
 % ---------------------------------------------------------------------------
-\section{Sprint Review and Retrospective}
+\section{Testing and Validation}
+Table~\ref{tab:tests-s3} summarizes the main test scenarios of Sprint~3.
+
+\begin{table}[H]\centering
+\renewcommand{\arraystretch}{1.25}
+\caption{Sprint~3 test scenarios}\label{tab:tests-s3}
+\begin{tabularx}{\textwidth}{|X|X|c|}
+\hline
+\textbf{Scenario} & \textbf{Expected result} & \textbf{Status}\\
+\hline
+Register a model from a successful run & Version appears in the registry with stage None & OK\\ \hline
+Promote a version to Production & Stage updated in registry and interface & OK\\ \hline
+Deploy a registered model & InferenceService created; status progresses to READY & OK\\ \hline
+Deploy with an invalid artifact path & Deployment marked failed; user notified & OK\\ \hline
+Send a prediction from the tester & Prediction returned from the model server & OK\\ \hline
+Delete a deployment & Cluster resources removed; record cleaned up & OK\\ \hline
+\end{tabularx}
+\end{table}
+
+% ---------------------------------------------------------------------------
+\section{Sprint Review}
 At the end of Sprint~3 a user can take a tracked run all the way to a live,
 queryable model, the platform now \emph{registers, deploys, and serves}.
 \begin{figure}[H]\centering
@@ -106,6 +208,16 @@ queryable model, the platform now \emph{registers, deploys, and serves}.
 \caption{Sprint~3 burndown chart}\label{fig:burndown-s3}
 \end{figure}
 
-\noindent\textbf{Retrospective.} % >>> USER
-Configuring the serving operator to match the cluster's ingress setup required
-careful investigation. \todo{your note}.
+\noindent\textbf{Retrospective.}
+What went well: expressing deployment as a single declarative resource paid off,
+once the operator was configured, deploying any model became trivial and uniform.
+To improve: configuring the serving operator to match the cluster's ingress setup
+(RawDeployment mode instead of the default serverless mode) required careful
+investigation and took several days of the sprint; reading the operator's
+documentation end-to-end before starting would have surfaced the constraint
+earlier.
+
+\section*{Conclusion}
+Sprint~3 closed the loop from a tracked run to a live, queryable model. The final
+sprint makes the platform observable, opens it to external clients, and adds
+administration.

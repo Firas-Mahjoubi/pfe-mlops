@@ -1,22 +1,26 @@
 %==============================================================================
-%  CHAPTER 1 — GENERAL CONTEXT OF THE PROJECT
+%  CHAPTER 1 — GENERAL PRESENTATION
 %==============================================================================
-\chapter{General Context of the Project}
+\chapter{General Presentation}
 \label{chap:context}
 
 \section*{Introduction}
-This chapter sets the stage for the project. It presents the host organization,
-the framework of the end-of-studies project, a study of the existing situation
-and its shortcomings, the proposed solution, and finally the method and
-work environment adopted to carry out the work.
+This chapter presents the general context of the project. It introduces the host
+organization, studies the existing situation and its limitations, states the
+problem, describes the adopted solution, presents the working methodology, and
+finally sets up the hardware and software environment used to carry out the work.
 
 % ---------------------------------------------------------------------------
 \section{Host Organization}
 \label{sec:host-org}
 
-% >>> USER: replace this section with INSOMEA's real presentation. Keep the
-% >>> sub-structure (presentation / activities / org chart). Add the logo and
-% >>> an org-chart figure into images/ and reference it.
+\subsection{Overview of INSOMEA}
+\begin{figure}[H]
+  \centering
+  \includegraphics[height=2.2cm,keepaspectratio]{insomea}
+  \caption{INSOMEA logo}
+  \label{fig:insomea-logo}
+\end{figure}
 
 \textbf{INSOMEA} (INSOMEA Computer Solutions) is a Microsoft Cloud Gold Partner
 and one of the leading cloud IT solution providers in the Middle East and Africa
@@ -49,62 +53,137 @@ The company's engagement methodology rests on four core values: end-to-end chang
 management, a fully certified technical team, solution adoption, and continuous
 support.
 
-% ---------------------------------------------------------------------------
-\section{Project Framework}
-\label{sec:framework}
-This work was conducted as an end-of-studies project (Projet de Fin d'\'Etudes),
-the final milestone of the engineering cycle, over a period of six months. Its
-objective is to design and build a complete \gls{mlops} platform that automates
-the machine-learning lifecycle, from code upload through to a live, queryable
+This end-of-studies project (Projet de Fin d'\'Etudes), the final milestone of the
+engineering cycle, was conducted within INSOMEA over a period of six months. Its
+objective is to design and build a complete \gls{mlops} platform that automates the
+machine-learning lifecycle, from code upload through to a live, queryable
 prediction service.
 
 % ---------------------------------------------------------------------------
-\section{Study of the Existing Situation}
+\section{Study of the Existing}
 \label{sec:existing}
-Before designing the solution, it is useful to characterize how machine-learning
-models are typically taken from experiment to production in teams that lack a
-dedicated platform. The prevailing workflow is largely manual:
+\gls{devops} unified software development and operations around automation,
+continuous integration, and continuous delivery, shrinking the time between
+writing code and running it in production. \gls{mlops} extends these principles to
+machine-learning systems. The key difference is that a machine-learning system is
+not defined by code alone, but by the combination of \textbf{code}, \textbf{data},
+and \textbf{model}: any of the three can change independently and break the system,
+which makes classic \gls{cicd} insufficient on its own. A complete machine-learning
+lifecycle therefore spans the loop: ingest \textbf{data}, \textbf{train} a model,
+\textbf{track} its parameters and metrics, \textbf{register} and version it,
+\textbf{deploy} it as a service, \textbf{monitor} it, and let external applications
+\textbf{consume} it.
 
+In practice, teams that lack a dedicated platform carry out this lifecycle
+manually:
 \begin{enumerate}[leftmargin=1.6em]
   \item A data scientist trains a model locally, inside a Jupyter notebook, on a
         personal machine.
-  \item Results (accuracy, loss, hyper-parameters) are recorded informally ---
-        in the notebook output, a spreadsheet, or not at all.
+  \item Results (accuracy, loss, hyper-parameters) are recorded informally, in the
+        notebook output, a spreadsheet, or not at all.
   \item The trained model is serialized to a file and shared by email or a shared
         drive.
-  \item An engineer wraps the model in a web service by hand and deploys it
-        through custom scripts onto a server.
+  \item An engineer wraps the model in a web service by hand and deploys it through
+        custom scripts onto a server.
   \item Monitoring, if any, is limited to checking that the service responds.
 \end{enumerate}
 
+\subsection{MLOps Maturity Levels}
+Google's reference architecture for \gls{mlops}~\cite{google_mlops} classifies
+organizations into three maturity levels, which give a useful yardstick for
+evaluating both the existing situation and the target:
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{Level 0, manual process.} Every step, training, validation,
+        deployment, is manual and script-driven. There is a complete disconnection
+        between the data scientists who produce models and the engineers who serve
+        them. Releases are infrequent and unreproducible. The workflow described
+        above sits squarely at this level.
+  \item \textbf{Level 1, ML pipeline automation.} Training is automated as a
+        pipeline that can be re-executed on demand; experiments are tracked;
+        models are versioned in a registry and deployed through a repeatable
+        process. The disconnect between experimentation and production disappears
+        because both run the same pipeline.
+  \item \textbf{Level 2, CI/CD pipeline automation.} The pipeline itself is built,
+        tested, and deployed automatically, and retraining can be triggered by new
+        data or detected drift.
+\end{itemize}
+The platform built in this project takes a team from level~0 to level~1, and part
+of the way to level~2: the application itself is continuously built and deployed
+through \gls{cicd}, while retraining remains user-triggered.
+
+\subsection{Existing Platforms}
+Several commercial and open-source systems already address this space.
+\textbf{Amazon SageMaker}~\cite{sagemaker} and \textbf{Google Vertex
+AI}~\cite{vertexai} are fully managed cloud services covering notebooks, training
+jobs, registries, and endpoints; \textbf{Azure Machine Learning}~\cite{azure_ml}
+offers the equivalent on Microsoft's cloud; \textbf{Databricks} couples a managed
+Spark environment with MLflow.
+
+A system closer to this project's positioning is \textbf{AIchor}~\cite{aichor},
+a training platform developed by InstaDeep, a company founded in Tunisia. It
+distributes machine-learning, reinforcement-learning, and \gls{llm} fine-tuning
+workloads on a cluster through a GitOps workflow, the user connects a Git
+repository, declares compute requirements in a specification file, and follows
+the job's logs and costs from a web interface.
+
+The study of AIchor, however, reveals three significant limitations that this
+project addresses. First, its lifecycle \emph{stops at training}: it produces a
+trained artifact but offers no model registry with lifecycle stages, no
+one-click deployment of the model as a live prediction service, and no secured
+public \gls{api} through which external applications can consume it; turning the
+training result into a usable web service remains the user's problem. Second, it
+is a proprietary, subscription-based commercial product: its internals cannot be
+inspected, extended, or self-maintained, and its cost model does not suit a
+small team that simply owns a cluster. Third, its entry barrier remains
+technical: submission requires a version-controlled repository and containerized
+code, and AIchor's own customer testimonials note that operating it still
+requires ``a data scientist with Docker skills''. The platform built in this
+project removes all three barriers: it covers the \emph{full} lifecycle through
+serving and public consumption by \gls{api} key, it is assembled entirely from
+open-source components at zero licensing cost, and a user needs nothing more
+than a browser, no Git setup and no Docker knowledge, to go from a script or
+notebook to a deployed model.
+
+On the open-source side, \textbf{Kubeflow} provides
+pipeline orchestration and serving primitives on Kubernetes, but assembling it
+into a usable product requires significant integration work and offers no
+ready-made user management, project organization, or simplified user experience.
+The study of these systems shaped the adopted solution presented in
+Section~\ref{sec:solution}: the goal is not to rebuild SageMaker, but to provide
+its core workflow, upload, train, track, register, deploy, consume, as a coherent,
+self-hosted product on open-source components.
+
 % ---------------------------------------------------------------------------
-\section{Critique of the Existing Situation}
+\section{Problematic}
 \label{sec:critique}
-This manual workflow suffers from well-known weaknesses:
+This manual workflow suffers from well-known weaknesses, which map directly onto
+the core challenges any \gls{mlops} platform must solve:
 
 \begin{itemize}[leftmargin=1.4em]
-  \item \textbf{No reproducibility.} Without a record of the exact code, data,
-        and parameters of a run, results cannot be reliably reproduced.
-  \item \textbf{Lost experiments.} Informal tracking means that comparisons
-        between models are unreliable and historical runs are quickly forgotten.
+  \item \textbf{No reproducibility.} Without a record of the exact code, data, and
+        parameters of a run, results cannot be reliably reproduced.
+  \item \textbf{Lost experiments.} Informal tracking makes comparisons between
+        models unreliable and historical runs are quickly forgotten.
   \item \textbf{``Works on my machine''.} Differences between the developer's
         environment and the production server cause failures that are hard to
         diagnose.
-  \item \textbf{Slow, error-prone deployment.} Hand-written deployment scripts
-        are brittle, must be repeated for every model, and are a frequent source
-        of incidents.
-  \item \textbf{No scalability.} A single hand-managed server cannot elastically
-        scale to demand or isolate models from one another.
+  \item \textbf{Slow, error-prone deployment.} Hand-written deployment scripts are
+        brittle, must be repeated for every model, and are a frequent source of
+        incidents.
+  \item \textbf{No isolation or scalability.} A single hand-managed server cannot
+        elastically scale to demand or isolate models from one another.
+  \item \textbf{No observability.} The health and resource consumption of running
+        models are not visible.
 \end{itemize}
 
 These limitations motivate a platform that automates and standardizes the entire
 lifecycle.
 
 % ---------------------------------------------------------------------------
-\section{Proposed Solution}
+\section{Adopted Solution}
 \label{sec:solution}
-The proposed solution is a self-hosted \gls{mlops} platform that lets a single
-user, through a web browser:
+The proposed solution is a self-hosted \gls{mlops} platform that lets a user,
+through a web browser:
 
 \begin{enumerate}[leftmargin=1.6em]
   \item sign up and sign in (token-based authentication);
@@ -117,29 +196,65 @@ user, through a web browser:
   \item browse, \textbf{register}, and \textbf{promote} model versions
         (Staging / Production / Archived);
   \item \textbf{deploy} a promoted model as a live \gls{http} prediction service;
-  \item send sample inputs and receive predictions back;
+  \item send sample inputs and receive predictions, and expose the model through a
+        public \gls{api} key for external applications;
   \item monitor live cluster and per-pod metrics from a dashboard;
-  \item (as an administrator) manage user accounts and roles and oversee the
-        whole platform.
+  \item (as an administrator) manage user accounts and roles and oversee the whole
+        platform.
 \end{enumerate}
 
 The platform runs on a real Kubernetes cluster and ships every change to a public
-URL through an automated \gls{cicd} pipeline.
+URL through an automated \gls{cicd} pipeline. Rather than adopt a managed
+\gls{mlops} service such as Amazon SageMaker~\cite{sagemaker} or Google Cloud
+Vertex~AI~\cite{vertexai}, which offer turnkey functionality at the cost of strong
+vendor lock-in, recurring fees, and hidden mechanics, the project assembles an
+open-source, self-hosted stack. For an end-of-studies project whose goals include
+\emph{understanding} the full \gls{mlops} stack, this is both more instructive and
+more portable, as Table~\ref{tab:comparison} summarizes.
+
+\begin{table}[H]\centering
+\caption{Existing platforms vs.\ the self-hosted open-source approach}
+\label{tab:comparison}
+\renewcommand{\arraystretch}{1.3}
+\small
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}p{2.1cm}|X|X|X|X|}
+\hline
+\textbf{Criterion} & \textbf{SageMaker / Vertex AI / Azure ML} & \textbf{Databricks} & \textbf{AIchor} & \textbf{This project (self-hosted)}\\
+\hline
+Cost            & Pay-per-use, can grow quickly & Subscription + compute & Subscription (licensed product) & Cluster cost only\\
+\hline
+Vendor lock-in  & High & High & High (proprietary platform) & None (open source)\\
+\hline
+Control         & Low (managed black box) & Medium & Low (closed product) & Full\\
+\hline
+Portability     & Cloud-specific & Cloud-specific & On-premise or cloud & Runs on any Kubernetes\\
+\hline
+Scope           & Full lifecycle & Data + training centric & Training only (no registry, serving, or public API) & Full lifecycle, including public serving\\
+\hline
+Ease of entry   & Cloud account and SDK & Notebook environment & Git repository + Docker skills & Browser upload only\\
+\hline
+Learning value  & Low (mechanics hidden) & Medium & Low (infrastructure abstracted) & High (every layer explicit)\\
+\hline
+\end{tabularx}
+\end{table}
 
 % ---------------------------------------------------------------------------
-\section{Adopted Method: Scrum}
+\section{Working Methodology}
 \label{sec:scrum}
+
+\subsection{Scrum Methodology}
 Given that the platform is built incrementally from a set of independent but
 connected capabilities, an \textbf{Agile} approach was chosen over a classic
-sequential (waterfall) process. Agile favors short iterations, frequent working
-increments, and the ability to re-prioritize, a natural fit for a project
-whose features (auth, pipelines, registry, deployment, monitoring) can be
-delivered and demonstrated one layer at a time.
-
-Among Agile methods, \textbf{Scrum}~\cite{scrum_guide} was adopted. Scrum is an
-iterative and incremental Agile method that organizes work into fixed-length
-iterations called \emph{sprints}, each producing a potentially shippable
-increment. Figure~\ref{fig:scrum} illustrates the overall Scrum process.
+sequential (waterfall) process. Among Agile methods, \textbf{Scrum}~\cite{scrum_guide}
+was adopted. Scrum is an iterative and incremental method that organizes work into
+fixed-length iterations called \emph{sprints}, each producing a potentially
+shippable increment. It defines three \textbf{artifacts}, the \emph{product
+backlog} (the ordered list of all desired features as user stories), the
+\emph{sprint backlog} (the stories selected for one sprint, broken into tasks), and
+the \emph{increment} (the working software delivered each sprint), and a set of
+\textbf{events}, sprint planning, the sprint itself, the sprint review
+(demonstration of the increment), and the retrospective (lessons learned).
+Figure~\ref{fig:scrum} illustrates the overall process.
 
 \begin{figure}[H]
   \centering
@@ -148,39 +263,28 @@ increment. Figure~\ref{fig:scrum} illustrates the overall Scrum process.
   \label{fig:scrum}
 \end{figure}
 
-\subsection{Scrum Roles}
+\subsection{Principles of Agile ``Scrum''}
+The adoption of Scrum rests on the values of the Agile manifesto, which guided the
+day-to-day work of the project:
 \begin{itemize}[leftmargin=1.4em]
-  \item \textbf{\gls{po}}: Mr.\ Amine Gonji (company supervisor, INSOMEA),
-        responsible for prioritizing the product backlog.
-  \item \textbf{\gls{sm}}: Mr.\ Ben Mardes Achref (academic supervisor),
-        responsible for facilitating the process and removing impediments.
-  \item \textbf{Development Team}: the student (author), responsible for analysis,
-        design, implementation, and testing.
+  \item \textbf{Working software over exhaustive documentation}, every sprint ends
+        with a demonstrable, deployed increment.
+  \item \textbf{Responding to change over following a plan}, the backlog is
+        re-prioritized between sprints as understanding grows.
+  \item \textbf{Individuals and interactions}, regular reviews with the supervisors
+        steer the direction of the work.
+  \item \textbf{Frequent delivery}, the platform's features (auth, pipelines,
+        registry, deployment, monitoring) are delivered and validated one layer at
+        a time.
 \end{itemize}
-
-\subsection{Scrum Artifacts}
-\begin{itemize}[leftmargin=1.4em]
-  \item \textbf{Product Backlog}: the ordered list of all desired features,
-        expressed as user stories (see Chapter~\ref{chap:requirements}).
-  \item \textbf{Sprint Backlog}: the subset of stories selected for a given
-        sprint, broken into tasks.
-  \item \textbf{Increment}: the working, demonstrable software produced at the end
-        of each sprint.
-\end{itemize}
-
-\subsection{Scrum Events}
-The project was organized into \textbf{four sprints}. Each sprint began with
-\emph{sprint planning}, proceeded with regular progress reviews, and ended with a
-\emph{sprint review} (demonstration of the increment) and a \emph{retrospective}
-(lessons learned). The detailed release plan is given in
-Chapter~\ref{chap:requirements}.
+The concrete Scrum team, product backlog, and sprint plan adopted for this project
+are detailed in Chapter~\ref{chap:requirements}.
 
 % ---------------------------------------------------------------------------
-\section{Work Environment}
+\section{Hardware and Software Environment}
 \label{sec:environment}
 
 \subsection{Hardware Environment}
-% >>> USER: adjust the development-machine row to your real specs.
 \begin{table}[H]\centering
 \renewcommand{\arraystretch}{1.3}
 \caption{Hardware environment}\label{tab:hardware}
@@ -195,7 +299,11 @@ Cloud cluster       & Azure Kubernetes Service (\gls{aks})\\
 \end{tabularx}
 \end{table}
 
-\subsection{Software Environment and Tools}
+\subsection{Software Environment}
+Table~\ref{tab:software} summarizes the software environment; the following
+subsections describe the development tools, design tools, and the development
+technologies that make up the platform's stack.
+
 \begin{table}[H]\centering
 \renewcommand{\arraystretch}{1.3}
 \caption{Software tools and technologies}\label{tab:software}
@@ -230,9 +338,141 @@ IDE                 & Visual Studio Code\\
 \end{tabularx}
 \end{table}
 
+\subsubsection{Development Tools}
+The implementation relied on \textbf{Visual Studio Code} as the main \gls{ui}
+editor, \textbf{Git} and \textbf{GitHub} for version control and collaboration,
+and \textbf{Docker} to build and run the application's container images locally
+before pushing them to the cluster.
+
+\subsubsection{Design Tools}
+The analysis and design artifacts were produced with \textbf{\gls{uml}}: use-case,
+sequence, and class diagrams were drawn with \textbf{draw.io} and
+\textbf{PlantUML}. The report itself was written in \textbf{\LaTeX}.
+
+\subsubsection{Development Technologies}
+The platform is assembled from the following open-source technologies; each is
+introduced below with the reasoning behind its choice.
+
+\paragraph{Containerization and Kubernetes.}
+\textbf{Containers}~\cite{docker_docs} package an application with its exact
+dependencies, solving the ``works on my machine'' problem at the root.
+\textbf{\gls{k8s}}~\cite{kubernetes_docs} is the de-facto orchestrator for
+containers at scale: it schedules workloads onto nodes, restarts failed pods,
+exposes services, and enforces resource limits. In this project Kubernetes is not
+only the deployment target but a core \emph{feature} of the product: every
+training job and every deployed model runs in its own resource-limited pod, which
+is what gives the platform isolation and elasticity. The platform runs on
+\gls{aks} in production and on KinD (Kubernetes-in-Docker) for local development,
+with no code changes between the two.
+
+\techlogo{kubernetes}{Kubernetes}
+
+\paragraph{Pipeline orchestration: Kubeflow Pipelines and Argo Workflows.}
+\gls{kfp}~\cite{kubeflow_pipelines} lets a training workflow be expressed as a
+small directed acyclic graph in Python; it compiles this graph into \textbf{Argo
+Workflows}~\cite{argo_workflows}, which runs each step as an isolated pod. This is
+what allows each user-submitted training to run in \emph{its own} resource-limited
+pod on cluster compute, with Argo handling scheduling, retries, log capture, and
+artifact passing. The backend submits a pipeline per run and follows its progress
+through the \gls{kfp} \gls{api}, which is also how live logs reach the user's
+browser.
+
+\techlogo{kubeflow}{Kubeflow Pipelines and Argo Workflows}
+
+\paragraph{Experiment tracking and registry: MLflow.}
+\textbf{MLflow}~\cite{mlflow_docs} is the de-facto open-source
+experiment-tracking layer for Python. A single call, \texttt{mlflow.autolog()},
+instruments scikit-learn, XGBoost, and LightGBM to record parameters, metrics, and
+artifacts with no further code changes. MLflow also provides a built-in
+\textbf{Model Registry} with named versions and Staging / Production / Archived
+stages. The platform provisions one MLflow experiment per project, so each
+project's runs are isolated, and mirrors registry state in its own database so the
+interface stays responsive without querying MLflow on every page.
+
+\techlogo{mlflow}{MLflow}
+
+\paragraph{Model serving: KServe.}
+\textbf{KServe}~\cite{kserve_docs} is a Kubernetes operator that turns a
+declarative \texttt{InferenceService} resource into a running Deployment, Service,
+and Ingress, backed by a framework-specific model server. The platform uses it in
+\textbf{RawDeployment} mode, which produces a plain Kubernetes Deployment
+compatible with a standard NGINX Ingress. This choice means deploying a model
+reduces, on the platform's side, to creating a single Kubernetes resource that
+points at the model artifact in object storage; everything else, model download,
+server startup, routing, health checks, is reconciled by the operator.
+
+\techlogo{kserve}{KServe}
+
+\paragraph{Object storage: MinIO.}
+\textbf{MinIO}~\cite{minio_docs} is an \gls{s3}-compatible object store deployed
+inside the cluster. It holds uploaded code and datasets and all artifacts MLflow
+produces, and is a true drop-in for the \gls{s3} \gls{api} that MLflow, KServe,
+and the AWS SDK expect, while remaining portable between local and cloud with zero
+code changes.
+
+\techlogo{minio}{MinIO}
+
+\paragraph{Database: PostgreSQL.}
+A single \textbf{PostgreSQL}~\cite{postgresql_docs} instance stores both the
+platform's own tables (users, projects, runs, models, deployments, \gls{api} keys)
+and MLflow's tracking tables, keeping backup, restore, and operations simple for a
+single-tenant system. The backend accesses it asynchronously through
+SQLAlchemy~2, so database I/O never blocks the event loop.
+
+\techlogo{postgresql}{PostgreSQL}
+
+\paragraph{Backend: FastAPI.}
+\textbf{FastAPI}~\cite{fastapi_docs} is an asynchronous Python web framework that
+derives request validation and an OpenAPI schema from type hints. Python is the
+natural choice because the entire machine-learning ecosystem, MLflow, the Kubeflow
+SDK, and the Kubernetes client, is Python, eliminating cross-language
+marshalling. The generated OpenAPI documentation also doubled as the contract for
+the Angular frontend during development.
+
+\techlogo{fastapi}{FastAPI}
+
+\paragraph{Frontend: Angular.}
+\textbf{Angular}~\cite{angular_docs} is a batteries-included framework (router,
+forms, HTTP, dependency injection, reactive state) that ships as a \gls{spa}. The
+project uses Angular~19 with standalone components and signals, served as static
+files by NGINX. Route guards enforce authentication (and, for the administration
+area, the administrator role) on the client side, mirroring the checks performed
+by the backend.
+
+\techlogo{angular}{Angular}
+
+\paragraph{Networking: Cloudflare Tunnel.}
+The platform is published to the outside world through a \textbf{Cloudflare
+Tunnel}~\cite{cloudflare_tunnel}, chosen to secure access to the application
+behind Cloudflare's edge. A lightweight in-cluster agent establishes an
+outbound-only connection to Cloudflare, so the application is reachable without
+exposing any public IP address or opening inbound ports on the cluster: the
+origin stays hidden and the attack surface is kept to a minimum. All public
+traffic is terminated at Cloudflare's edge over \gls{https} with a managed
+\gls{tls} certificate and passes through Cloudflare's protections, including
+\gls{ddos} mitigation, before reaching the single hardened public hostname that
+fronts the in-cluster service. Cloudflare therefore acts as a secure reverse
+proxy that adds a layer of defense in front of the platform.
+
+\techlogo{cloudflare}{Cloudflare Tunnel}
+
+\paragraph{CI/CD: GitHub Actions and Azure Container Registry.}
+Every change pushed to the main branch triggers a \textbf{GitHub Actions} workflow
+that builds the backend and frontend container images, pushes them to
+\textbf{\gls{acr}}, and upgrades the cluster deployment, delivering continuous
+deployment to the public URL.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[height=1.6cm,keepaspectratio]{github_actions}\hspace{1.5cm}
+  \includegraphics[height=1.6cm,keepaspectratio]{acr}
+  \caption{Logos of GitHub Actions and Azure Container Registry}
+  \label{fig:logo-cicd}
+\end{figure}
+
 \section*{Conclusion}
-This chapter introduced the host organization, the project framework, and the
-shortcomings of the manual machine-learning workflow that motivate this work. It
-presented the proposed \gls{mlops} platform at a high level, and the Scrum
-method and tooling adopted. The next chapter establishes the technical
-background and justifies the technology choices in depth.
+This chapter introduced the host organization, studied the existing manual
+machine-learning workflow and its limitations, stated the problem, and presented
+the adopted self-hosted \gls{mlops} solution, the Scrum methodology, and the
+hardware and software environment. The next chapter captures the platform's
+requirements and lays out the project plan.

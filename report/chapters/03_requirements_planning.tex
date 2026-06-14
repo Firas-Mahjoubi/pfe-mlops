@@ -1,37 +1,53 @@
 %==============================================================================
-%  CHAPTER 3 — REQUIREMENTS ANALYSIS AND PROJECT PLANNING
+%  CHAPTER 2 — PLANNING AND CAPTURE OF NEEDS
 %==============================================================================
-\chapter{Requirements Analysis and Project Planning}
+\chapter{Planning and Capture of Needs}
 \label{chap:requirements}
 
 \section*{Introduction}
-This chapter specifies what the platform must do and how the work was organized.
-It identifies the actors, the functional and non-functional requirements, the
-global use-case model, the product backlog and its breakdown into four sprints,
-and finally the global system architecture that the sprints incrementally build.
+This chapter captures what the platform must do and how the work was organized. It
+analyzes the needs (actors, functional and non-functional requirements, and the
+use-case model), presents the project management with Scrum (the team, the product
+backlog, and the sprint plan), and finally describes the application architecture
+and the overall architecture of the project.
 
 % ---------------------------------------------------------------------------
-\section{Requirements Specification}
+\section{Needs Analysis}
 \label{sec:requirements}
 
 \subsection{Identification of Actors}
-\begin{itemize}[leftmargin=1.4em]
-  \item \textbf{Platform user (data scientist).} The primary actor. Authenticates,
-        manages projects, uploads code and data, triggers training runs, inspects
-        experiments, registers and promotes models, deploys them, and queries
-        predictions.
-  \item \textbf{External API client.} A third-party application or script that
-        calls a deployed model's public endpoint using an \gls{api} key, without a
-        platform account.
-  \item \textbf{Administrator.} A privileged user who oversees the whole
-        platform: manages user accounts (activate, deactivate, promote, delete),
-        views platform-wide statistics and cluster health, and inspects every
-        user's projects, pipelines, and deployments.
-  \item \textbf{System (automated actors).} The training pipeline and the model
-        server act on the user's behalf once triggered.
-\end{itemize}
+An actor is any entity that interacts with the system from the outside. Four
+actors were identified.
 
-\subsection{Functional Requirements}
+\paragraph{Platform user (data scientist).}
+The primary actor and the reason the platform exists. After authenticating, the
+user organizes work into projects, uploads code and data, triggers training runs
+and follows their live logs, inspects and compares experiments, registers and
+promotes model versions, deploys them as live services, tests predictions from
+the interface, and manages the \gls{api} keys that expose a deployment publicly.
+The platform assumes no infrastructure knowledge from this actor: every cluster
+interaction happens behind a button.
+
+\paragraph{External API client.}
+A third-party application, a website, a mobile application, or any backend
+script, that calls a deployed model's public prediction endpoint using an
+\gls{api} key. This actor has no platform account and never sees the interface;
+its entire contract with the system is one authenticated \gls{http} call.
+
+\paragraph{Administrator.}
+A privileged user who oversees the whole platform: manages user accounts
+(activate, deactivate, promote, demote, purge, delete), views platform-wide
+statistics and cluster health, and inspects every user's projects, pipelines, and
+deployments. An administrator inherits all capabilities of a platform user.
+
+\paragraph{System (automated actors).}
+The training pipeline and the model server act on the user's behalf once
+triggered: the pipeline downloads code, runs it, and reports results to the
+tracking server; the model server loads a model artifact and answers prediction
+requests. They are secondary actors that appear in the sequence diagrams of the
+sprint chapters.
+
+\subsection{Functional Specification}
 \begin{itemize}[leftmargin=1.4em]
   \item \textbf{Authentication.} Sign up, sign in, and session refresh using
         \gls{jwt} tokens.
@@ -58,69 +74,96 @@ and finally the global system architecture that the sprints incrementally build.
 \end{itemize}
 
 \subsection{Non-Functional Requirements}
+Beyond what the system does, the following qualities constrain how it does it.
+
 \begin{itemize}[leftmargin=1.4em]
-  \item \textbf{Security.} Stateless \gls{jwt} authentication; per-deployment
-        \gls{api} keys stored as hashes; ownership checks on every resource.
-  \item \textbf{Performance.} Asynchronous backend for I/O-bound concurrency.
+  \item \textbf{Security.} Authentication is stateless, based on signed \gls{jwt}
+        tokens~\cite{rfc7519}, so any backend replica can validate a request.
+        Passwords are stored only as bcrypt hashes, public \gls{api} keys only as
+        \gls{sha}-256 hashes, in line with \gls{api} security good
+        practice~\cite{owasp_api}. Every resource access is checked against the
+        owner, and administrative endpoints require the administrator role.
+  \item \textbf{Performance.} The backend is fully asynchronous, so slow external
+        calls (cluster \gls{api}, object store, tracking server) never block other
+        requests; the interface must remain responsive while a training run
+        executes.
   \item \textbf{Scalability.} Each training job and each model server runs in its
-        own resource-limited pod on Kubernetes.
-  \item \textbf{Portability.} Containerized; runs identically on local KinD and on
-        \gls{aks}.
-  \item \textbf{Reproducibility.} Isolated execution and automatic recording of
-        run inputs and outputs.
-  \item \textbf{Usability.} A single, coherent web interface for the whole
-        lifecycle.
+        own resource-limited pod on Kubernetes, so workloads are isolated from
+        one another and the cluster can grow by adding nodes.
+  \item \textbf{Portability.} Everything is containerized and expressed as
+        Kubernetes resources; the platform runs identically on a local KinD
+        cluster and on \gls{aks}, which is how it was developed and deployed.
+  \item \textbf{Reproducibility.} A run's code, parameters, metrics, and
+        artifacts are captured automatically, so any result can be traced back to
+        what produced it.
+  \item \textbf{Usability.} The whole lifecycle is driven from a single, coherent
+        web interface; a data scientist needs no kubectl, no YAML, and no cloud
+        console.
+  \item \textbf{Maintainability.} The backend is organized in layers (routers,
+        services, models) with typed schemas at the boundaries, so each concern
+        can evolve independently.
 \end{itemize}
 
-% ---------------------------------------------------------------------------
-\section{Global Use-Case Model}
+\subsection{Use-Case Model}
 \label{sec:usecases}
-% >>> USER: render diagrams/usecase_global.puml and place the PDF in images/.
+Figure~\ref{fig:usecase-global} presents the global use-case diagram, summarizing
+the interactions of the three human actors (platform user, administrator, and
+external \gls{api} client) with the system.
 \begin{figure}[H]\centering
-  % \includegraphics[width=0.9\textwidth]{usecase_global.pdf}
-  \fbox{\parbox[c][5cm][c]{0.9\textwidth}{\centering\itshape
-    Placeholder --- insert \texttt{images/usecase\_global.pdf}\\
-    (render \texttt{diagrams/usecase\_global.puml} with PlantUML)}}
+  \includegraphics[width=0.9\textwidth,height=0.72\textheight,keepaspectratio]{usecase_global}
   \caption{Global use-case diagram of the platform}
   \label{fig:usecase-global}
 \end{figure}
 
 % ---------------------------------------------------------------------------
-\section{Product Backlog}
+\section{Project Management with Scrum}
+\label{sec:scrum-management}
+
+\subsection{The Scrum Team}
+The Scrum framework presented in Chapter~\ref{chap:context} was applied with the
+following team:
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{\gls{po}}: Mr.\ Amine Gonji (company supervisor, INSOMEA),
+        responsible for prioritizing the product backlog and validating each
+        increment.
+  \item \textbf{\gls{sm}}: Mr.\ Ben Mardes Achref (academic supervisor),
+        responsible for facilitating the process and removing impediments.
+  \item \textbf{Development Team}: the student (author), responsible for analysis,
+        design, implementation, and testing, with technical guidance from
+        Mr.\ Benarous Abderrahmen.
+\end{itemize}
+
+\subsection{Product Backlog}
 \label{sec:backlog}
-The product backlog gathers all desired capabilities as user stories, ordered by
-priority. Story points estimate relative effort.
-% >>> USER: confirm/adjust the points and priorities to match your real planning.
+The product backlog (Table~\ref{tab:backlog}) gathers all desired capabilities as
+user stories, ordered by priority; story points estimate the relative effort.
 
-\begin{longtable}{p{0.5cm} p{8.8cm} p{1.6cm} p{1.6cm}}
-\caption{Product backlog}\label{tab:backlog}\\
-\toprule
+\begin{table}[H]\centering
+\caption{Product backlog}\label{tab:backlog}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabularx}{\textwidth}{|c|X|c|c|}
+\hline
 \textbf{\#} & \textbf{User story} & \textbf{Prio.} & \textbf{Pts}\\
-\midrule
-\endfirsthead
-\toprule
-\textbf{\#} & \textbf{User story} & \textbf{Prio.} & \textbf{Pts}\\
-\midrule
-\endhead
-1  & As a user, I want to sign up and sign in so that my work is private.        & High & 5\\
-2  & As a user, I want to create and manage projects to organize my work.        & High & 5\\
-3  & As a user, I want to upload code and a dataset through the browser.         & High & 5\\
-4  & As a user, I want to trigger a training run on the cluster.                 & High & 8\\
-5  & As a user, I want metrics and artifacts captured automatically.             & High & 5\\
-6  & As a user, I want to watch the live logs of a running pipeline.             & Med  & 3\\
-7  & As a user, I want to browse and compare my experiment runs.                 & Med  & 3\\
-8  & As a user, I want to register and version trained models.                   & High & 5\\
-9  & As a user, I want to promote a model between Staging/Production/Archived.   & High & 3\\
-10 & As a user, I want to deploy a registered model as a live service.           & High & 8\\
-11 & As a user, I want to send inputs and get predictions from the UI.           & High & 5\\
-12 & As a user, I want a dashboard of cluster and per-pod metrics.               & Med  & 5\\
-13 & As a user, I want public API keys so external apps can call my model.       & Med  & 5\\
-14 & As a user, I want clear diagnostics when an uploaded script fails.          & Med  & 5\\
-\bottomrule
-\end{longtable}
+\hline
+1  & As a user, I want to sign up and sign in so that my work is private.        & High & 5\\ \hline
+2  & As a user, I want to create and manage projects to organize my work.        & High & 5\\ \hline
+3  & As a user, I want to upload code and a dataset through the browser.         & High & 5\\ \hline
+4  & As a user, I want to trigger a training run on the cluster.                 & High & 8\\ \hline
+5  & As a user, I want metrics and artifacts captured automatically.             & High & 5\\ \hline
+6  & As a user, I want to watch the live logs of a running pipeline.             & Med  & 3\\ \hline
+7  & As a user, I want to browse and compare my experiment runs.                 & Med  & 3\\ \hline
+8  & As a user, I want to register and version trained models.                   & High & 5\\ \hline
+9  & As a user, I want to promote a model between Staging/Production/Archived.   & High & 3\\ \hline
+10 & As a user, I want to deploy a registered model as a live service.           & High & 8\\ \hline
+11 & As a user, I want to send inputs and get predictions from the UI.           & High & 5\\ \hline
+12 & As a user, I want a dashboard of cluster and per-pod metrics.               & Med  & 5\\ \hline
+13 & As a user, I want public API keys so external apps can call my model.       & Med  & 5\\ \hline
+14 & As a user, I want clear diagnostics when an uploaded script fails.          & Med  & 5\\ \hline
+15 & As an administrator, I want to manage users and oversee the platform.       & Med  & 5\\ \hline
+\end{tabularx}
+\end{table}
 
-% ---------------------------------------------------------------------------
-\section{Release Plan and Sprint Breakdown}
+\subsection{Sprint Planning}
 \label{sec:release-plan}
 The backlog was delivered over four sprints, each producing a demonstrable
 increment:
@@ -133,46 +176,111 @@ increment:
   \item \textbf{Sprint~3, Registry \& Deployment:} model registry, promotion,
         deployment, and prediction (stories 8--11).
   \item \textbf{Sprint~4, Observability \& Public Serving:} metrics dashboard,
-        public \gls{api} keys, and diagnostics/robustness (stories 12--14).
+        public \gls{api} keys, diagnostics, and administration (stories 12--15).
 \end{itemize}
 
-% >>> USER: set the real dates on the Gantt below (one bar per sprint).
+This split is deliberate: each sprint delivers a complete vertical slice that the
+previous one makes possible. Sprint~1 establishes identity and ownership, without
+which nothing can be private; Sprint~2 produces tracked training runs, which are
+the raw material of Sprint~3's registry and deployments; Sprint~4 then makes the
+now-complete lifecycle observable, externally consumable, and administrable. The
+story numbers in each sprint chapter's backlog trace back to
+Table~\ref{tab:backlog}, so every implemented task is connected to a requirement.
+
+The project ran over six months, from 12 January 2026, opening with a framing and
+state-of-the-art phase, followed by the four sprints, with the report written in
+parallel throughout. Table~\ref{tab:schedule} lists the phases with their dates and
+durations, and Figure~\ref{fig:gantt} visualizes the same schedule.
+
+\begin{table}[H]\centering
+\renewcommand{\arraystretch}{1.35}
+\caption{Project schedule}\label{tab:schedule}
+\begin{tabularx}{\textwidth}{|>{\bfseries}l|c|c|X|}
+\hline
+\rowcolor{primary!15}
+\textbf{Phase} & \textbf{Period} & \textbf{Duration} & \textbf{Main objective}\\
+\hline
+Framing \& SOTA & 12 Jan -- 01 Feb & 3 weeks & Framing, state of the art, and environment setup\\ \hline
+Sprint 1 & 02 Feb -- 01 Mar & 4 weeks & Authentication and project management\\ \hline
+Sprint 2 & 02 Mar -- 05 Apr & 5 weeks & Training pipeline and experiment tracking\\ \hline
+Sprint 3 & 06 Apr -- 03 May & 4 weeks & Model registry, deployment, and prediction\\ \hline
+Sprint 4 & 04 May -- 14 Jun & 6 weeks & Observability, public API, and administration\\ \hline
+Report writing & 12 Jan -- 11 Jul & Continuous & Drafting and revising the report in parallel\\ \hline
+\end{tabularx}
+\end{table}
+
 \begin{figure}[H]\centering
-\resizebox{\textwidth}{!}{%
 \begin{ganttchart}[
-    vgrid, hgrid,
-    bar height=0.5,
-    title height=1,
-    bar/.append style={fill=primary!70},
+    hgrid={*{1}{draw=black!15}},
+    x unit=0.048cm,
+    y unit chart=0.8cm,
+    y unit title=0.62cm,
+    bar height=0.58,
+    bar top shift=0.21,
+    bar/.append style={fill=primary!70, rounded corners=2pt},
     bar label font=\small,
     title label font=\small\bfseries,
-]{1}{16}
-  \ganttset{calendar week text={W\currentweek{}}}
-  \gantttitle{Project Timeline (weeks)}{16} \\
-  \ganttbar{Sprint 1 --- Foundation}{1}{3} \\
-  \ganttbar{Sprint 2 --- Training \& Tracking}{4}{8} \\
-  \ganttbar{Sprint 3 --- Registry \& Deployment}{9}{12} \\
-  \ganttbar{Sprint 4 --- Observability \& Public}{13}{16}
-\end{ganttchart}}
-\caption{Project Gantt chart (replace week ranges with real dates)}
+    title/.append style={fill=primary!15},
+    time slot format=isodate,
+]{2026-01-12}{2026-07-31}
+  \gantttitlecalendar{year, month=shortname} \\
+  \ganttbar{Framing \& State of the Art}{2026-01-12}{2026-02-01} \\
+  \ganttbar{Sprint 1, Foundation}{2026-02-02}{2026-03-01} \\
+  \ganttbar{Sprint 2, Training \& Tracking}{2026-03-02}{2026-04-05} \\
+  \ganttbar{Sprint 3, Registry \& Deployment}{2026-04-06}{2026-05-03} \\
+  \ganttbar{Sprint 4, Observability \& Serving}{2026-05-04}{2026-06-14} \\
+  \ganttbar[bar/.append style={fill=primary!35, rounded corners=2pt}]%
+    {Report writing}{2026-01-12}{2026-07-11}
+\end{ganttchart}
+\caption{Project schedule (Gantt chart)}
 \label{fig:gantt}
 \end{figure}
 
 % ---------------------------------------------------------------------------
-\section{Global System Architecture}
-\label{sec:architecture}
-The platform follows a layered, containerized architecture deployed on Kubernetes.
-A browser-based \gls{spa} talks to an asynchronous backend, which orchestrates the
-training pipeline, the experiment tracker, the object store, the database, and the
-model servers. Public traffic reaches the cluster through a Cloudflare Tunnel.
+\section{Application Architecture}
+\label{sec:app-architecture}
+The platform adopts a \textbf{layered (n-tier) architecture} that enforces a clear
+separation of concerns and keeps each responsibility independently testable and
+replaceable:
 
-% >>> USER: redraw the ARCHITECTURE.md deployment diagram in draw.io and export
-% >>> to images/architecture.pdf, then uncomment:
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{Presentation layer}, an Angular single-page application that runs
+        in the browser and consumes the backend's \gls{rest} \gls{api}.
+  \item \textbf{API layer}, FastAPI routers that validate requests, enforce
+        authentication and ownership, and expose the platform's endpoints.
+  \item \textbf{Service layer}, the business logic that orchestrates the external
+        systems (pipeline submission, MLflow tracking, KServe deployment, object
+        storage), isolating the routers from infrastructure details.
+  \item \textbf{Data layer}, SQLAlchemy models mapped onto PostgreSQL, holding
+        users, projects, pipeline runs, models, deployments, and API keys.
+\end{itemize}
+
+This separation means, for example, that the deployment logic can talk to KServe
+through a single service module without the \gls{api} layer knowing how an
+\texttt{InferenceService} is created, and that the data layer can evolve
+independently of the user interface.
+
+The layered style was preferred over a microservices decomposition for a reason
+of proportionality: the platform is operated by a small team and already
+delegates its heavyweight concerns (pipeline execution, model serving, artifact
+storage) to dedicated cluster components. Splitting the remaining business logic
+into separate services would multiply deployment units and network boundaries
+without adding isolation where it matters, which the per-pod execution model
+already provides. The result is one well-structured backend image and one
+frontend image, each independently deployable, in front of a set of specialized
+open-source systems.
+
+% ---------------------------------------------------------------------------
+\section{Overall Project Architecture}
+\label{sec:architecture}
+At the infrastructure level, the platform is fully containerized and deployed on
+Kubernetes. A browser-based \gls{spa} talks to the asynchronous backend, which
+orchestrates the training pipeline, the experiment tracker, the object store, the
+database, and the model servers; public traffic reaches the cluster through a
+Cloudflare Tunnel. Figure~\ref{fig:architecture} shows the overall deployment.
+
 \begin{figure}[H]\centering
-  % \includegraphics[width=\textwidth]{architecture.pdf}
-  \fbox{\parbox[c][6cm][c]{\textwidth}{\centering\itshape
-    Placeholder --- insert \texttt{images/architecture.pdf}\\
-    (redraw the deployment diagram from the project's ARCHITECTURE document)}}
+  \includegraphics[width=0.9\textwidth,height=0.72\textheight,keepaspectratio]{architecture}
   \caption{Global deployment architecture of the platform}
   \label{fig:architecture}
 \end{figure}
@@ -183,6 +291,7 @@ $\rightarrow$ backend service $\rightarrow$ (database / object store / tracker /
 pipeline / model servers)}.
 
 \section*{Conclusion}
-This chapter specified the platform's requirements, organized them into a
-prioritized backlog and a four-sprint release plan, and presented the global
-architecture. The following four chapters detail each sprint in turn.
+This chapter captured the platform's needs, organized the work with Scrum, the
+team, a prioritized product backlog, and a four-sprint plan, and described the
+application and overall project architecture. The following four chapters detail
+the study and implementation of each sprint in turn.

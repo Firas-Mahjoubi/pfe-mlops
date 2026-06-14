@@ -1,0 +1,22 @@
+@startuml uc_sprint1
+' Render to ../images/uc_sprint1.pdf
+left to right direction
+skinparam packageStyle rectangle
+skinparam shadowing false
+
+actor "Platform User\n(Data Scientist)" as User
+
+rectangle "Sprint 1 --- Foundation" {
+  usecase "Sign up"          as UC1
+  usecase "Sign in"          as UC2
+  usecase "Refresh session"  as UC3
+  usecase "Manage projects"  as UC4
+}
+
+User --> UC1
+User --> UC2
+User --> UC3
+User --> UC4
+
+UC4 ..> UC2 : <<include>>
+@enduml

@@ -15,16 +15,21 @@ import { IconComponent } from '../../../shared/ui/icon/icon.component';
     <app-auth-layout>
       <!-- Brand-pane headline (slotted) -->
       <ng-container brand-headline>
-        <h2 class="text-[28px] font-semibold tracking-tight leading-tight">Ship ML to production with confidence.</h2>
-        <p class="text-[13px] text-ink3 mt-3 max-w-md">
-          Track experiments, version models, deploy with one click. Built on MLflow,
-          Kubeflow, and Pipelines.
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cyan3/10 border border-cyan3/20 text-[10.5px] font-medium text-cyan2 tracking-wide uppercase">
+          <span class="w-1.5 h-1.5 rounded-full bg-cyan3 animate-pulse"></span>
+          MLOps Platform
+        </span>
+        <h2 class="text-[28px] font-semibold tracking-tight leading-tight mt-4">Ship ML to production with confidence.</h2>
+        <p class="text-[13px] text-ink3 mt-3 max-w-md leading-relaxed">
+          From your first experiment to a live endpoint, train, track, version,
+          and deploy your models in one place. Built on MLflow, Kubeflow, and
+          KServe.
         </p>
       </ng-container>
 
       <!-- Form -->
-      <h1 class="text-[22px] font-semibold tracking-tight">Sign in</h1>
-      <p class="text-[12.5px] text-ink3 mt-1">Welcome back. Enter your credentials to continue.</p>
+      <h1 class="text-[22px] font-semibold tracking-tight">Welcome back</h1>
+      <p class="text-[12.5px] text-ink3 mt-1">Sign in to pick up right where you left off.</p>
 
       @if (errorMessage) {
         <div class="mt-5 px-3 py-2 rounded-md bg-bad/10 border border-bad/20 text-bad text-[12px] flex items-start gap-2">
@@ -121,7 +126,11 @@ export class LoginComponent {
       },
       error: (err) => {
         this.loading = false;
-        this.errorMessage = err.error?.detail || 'Login failed. Please try again.';
+        this.errorMessage =
+          err.error?.detail ||
+          (err.status === 0
+            ? 'Cannot reach the server. Check your connection and try again.'
+            : 'We could not sign you in. Please check your email and password.');
       },
     });
   }

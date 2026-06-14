@@ -14,15 +14,20 @@ import { IconComponent } from '../../../shared/ui/icon/icon.component';
   template: `
     <app-auth-layout>
       <ng-container brand-headline>
-        <h2 class="text-[28px] font-semibold tracking-tight leading-tight">Build, train, ship — in one platform.</h2>
-        <p class="text-[13px] text-ink3 mt-3 max-w-md">
-          From experiment tracking to production serving, with zero-config MLflow
-          autolog and KServe inference.
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cyan3/10 border border-cyan3/20 text-[10.5px] font-medium text-cyan2 tracking-wide uppercase">
+          <span class="w-1.5 h-1.5 rounded-full bg-cyan3 animate-pulse"></span>
+          Get started free
+        </span>
+        <h2 class="text-[28px] font-semibold tracking-tight leading-tight mt-4">From notebook to production, in minutes.</h2>
+        <p class="text-[13px] text-ink3 mt-3 max-w-md leading-relaxed">
+          Upload your code, run it on the cluster, and watch metrics, models, and
+          deployments come together, with zero-config MLflow autolog and KServe
+          inference.
         </p>
       </ng-container>
 
       <h1 class="text-[22px] font-semibold tracking-tight">Create your account</h1>
-      <p class="text-[12.5px] text-ink3 mt-1">Spin up a workspace in seconds.</p>
+      <p class="text-[12.5px] text-ink3 mt-1">Spin up your workspace in seconds.</p>
 
       @if (errorMessage) {
         <div class="mt-5 px-3 py-2 rounded-md bg-bad/10 border border-bad/20 text-bad text-[12px] flex items-start gap-2">
@@ -124,9 +129,14 @@ import { IconComponent } from '../../../shared/ui/icon/icon.component';
             Create account
           }
         </app-btn>
+
+        <p class="text-center text-[11px] text-ink3 flex items-center justify-center gap-1.5">
+          <app-icon name="lock" className="w-3 h-3 text-ink3"></app-icon>
+          No credit card needed. Your workspace is ready instantly.
+        </p>
       </form>
 
-      <p class="mt-6 text-center text-[12px] text-ink3">
+      <p class="mt-5 text-center text-[12px] text-ink3">
         Already have an account?
         <a routerLink="/login" class="text-cyan3 hover:text-cyan2 font-medium">Sign in</a>
       </p>
@@ -171,7 +181,11 @@ export class SignupComponent {
       },
       error: (err) => {
         this.loading = false;
-        this.errorMessage = err.error?.detail || 'Signup failed. Please try again.';
+        this.errorMessage =
+          err.error?.detail ||
+          (err.status === 0
+            ? 'Cannot reach the server. Check your connection and try again.'
+            : 'We could not create your account. Please try again.');
       },
     });
   }

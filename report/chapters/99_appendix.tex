@@ -1,0 +1,108 @@
+%==============================================================================
+%  APPENDICES
+%==============================================================================
+\chapter{REST API Reference}
+\label{app:api}
+
+This annex lists the platform's main \gls{rest} endpoints. All routes below are
+prefixed with \texttt{/api/v1} and require a \gls{jwt} access token, except the
+authentication routes and the public prediction endpoint, which is mounted under
+\texttt{/api/public} and authenticated by \gls{api} key. Administrative routes
+additionally require the administrator role.
+
+\begin{table}[H]\centering
+\renewcommand{\arraystretch}{1.2}
+\caption{REST endpoints: authentication, projects, pipelines, and experiments}
+\label{tab:api-ref}
+\footnotesize
+\begin{tabularx}{\textwidth}{|p{2.1cm}|p{5.6cm}|X|}
+\hline
+\textbf{Method} & \textbf{Path} & \textbf{Purpose}\\
+\hline
+\multicolumn{3}{|l|}{\cellcolor{primary!12}\textbf{Authentication}}\\ \hline
+POST & \texttt{/auth/signup} & Create an account; returns a token pair\\ \hline
+POST & \texttt{/auth/login} & Authenticate; returns a token pair\\ \hline
+POST & \texttt{/auth/refresh} & Renew the access token\\ \hline
+GET  & \texttt{/auth/me} & Current user profile (including role)\\ \hline
+\multicolumn{3}{|l|}{\cellcolor{primary!12}\textbf{Projects and uploads}}\\ \hline
+GET / POST & \texttt{/projects} & List own projects / create a project\\ \hline
+GET / PUT / DELETE & \texttt{/projects/\{id\}} & Read, update, or delete a project\\ \hline
+POST & \texttt{/uploads/upload} & Upload code or dataset to a project\\ \hline
+POST & \texttt{/uploads/files/analyze} & Pre-flight static analysis of uploaded code\\ \hline
+\multicolumn{3}{|l|}{\cellcolor{primary!12}\textbf{Pipelines and experiments}}\\ \hline
+POST & \texttt{/pipelines/trigger-custom} & Run the uploaded code as a pipeline\\ \hline
+GET  & \texttt{/pipelines/\{run\_id\}/logs} & Live logs of a run\\ \hline
+GET  & \texttt{/pipelines/\{run\_id\}/error} & Captured failure reason of a run\\ \hline
+GET  & \texttt{/experiments/project/\{id\}} & Runs of a project with metrics\\ \hline
+GET  & \texttt{/experiments/compare} & Compare metrics across runs\\ \hline
+\end{tabularx}
+\end{table}
+
+\begin{table}[H]\centering
+\renewcommand{\arraystretch}{1.2}
+\caption{REST endpoints: models, deployments, public API, and administration}
+\label{tab:api-ref2}
+\footnotesize
+\begin{tabularx}{\textwidth}{|p{2.1cm}|p{5.6cm}|X|}
+\hline
+\textbf{Method} & \textbf{Path} & \textbf{Purpose}\\
+\hline
+\multicolumn{3}{|l|}{\cellcolor{primary!12}\textbf{Models and deployments}}\\ \hline
+GET  & \texttt{/models/\{name\}/versions} & Versions of a registered model\\ \hline
+POST & \texttt{/models/\{name\}/versions/\{v\}/ promote} & Change a version's lifecycle stage\\ \hline
+POST & \texttt{/deployments} & Deploy a model as an InferenceService\\ \hline
+POST & \texttt{/deployments/\{id\}/predict} & Authenticated in-platform prediction\\ \hline
+POST / GET & \texttt{/deployments/\{id\}/api-keys} & Create / list public API keys\\ \hline
+DELETE & \texttt{/deployments/\{id\}/api-keys/ \{kid\}} & Revoke a key\\ \hline
+\multicolumn{3}{|l|}{\cellcolor{primary!12}\textbf{Public (API-key authenticated)}}\\ \hline
+POST & \texttt{/api/public/predict/\{id\}} & Prediction for external clients\\ \hline
+\multicolumn{3}{|l|}{\cellcolor{primary!12}\textbf{Monitoring and administration}}\\ \hline
+GET  & \texttt{/cluster/metrics} & Cluster and per-pod resource metrics\\ \hline
+GET  & \texttt{/admin/users} & List all accounts (admin)\\ \hline
+PATCH / DELETE & \texttt{/admin/users/\{id\}} & Update role/status or delete (admin)\\ \hline
+POST & \texttt{/admin/users/\{id\}/purge} & Purge a user's resources (admin)\\ \hline
+GET  & \texttt{/admin/overview} & Platform-wide statistics (admin)\\ \hline
+\end{tabularx}
+\end{table}
+
+%==============================================================================
+\chapter{Continuous Deployment Pipeline}
+\label{app:cicd}
+
+Every push to the main branch triggers a GitHub Actions workflow that builds and
+deploys the platform. The workflow authenticates to Azure, builds the backend and
+frontend container images with registry-backed layer caching, pushes them to
+\gls{acr}, and upgrades the Helm release on the \gls{aks} cluster. A concurrency
+group cancels any in-progress run when a newer commit arrives, so the cluster
+always converges on the latest version of the main branch.
+
+\begin{lstlisting}[caption={Excerpt of the GitHub Actions deployment workflow.},label={lst:cicd}]
+name: Build and deploy to AKS
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  ACR_LOGIN_SERVER: acrmlopspfedemo.azurecr.io
+  AKS_CLUSTER: aks-mlops-pfe
+  HELM_RELEASE: mlops
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-main
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      # ... az login, ACR auth ...
+      # build + push backend and frontend images (cache-from/to ACR)
+      # helm upgrade --install with the new image tags
+\end{lstlisting}
+
+The deployment itself is described by a Helm chart that templates every
+Kubernetes resource of the platform (backend, frontend, database, object store,
+tracking server, tunnel agent), so the same chart deploys the full stack to the
+local development cluster and to \gls{aks} with only a values file changing.

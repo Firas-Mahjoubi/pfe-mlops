@@ -21,7 +21,8 @@
 %------------------------------------------------------------------ encoding/lang
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
-\usepackage[english]{babel}
+\usepackage[french,english]{babel}  % english is the main language; french for the resume
+\usepackage{csquotes}               % proper quotation support with babel + biblatex
 \usepackage{lmodern}
 \usepackage{microtype}
 
@@ -37,6 +38,7 @@
 \graphicspath{{images/}{logo/}}
 \usepackage{wrapfig}   % float technology logos beside their description
 \usepackage{xcolor}
+\usepackage{colortbl}   % \rowcolor for shaded table header rows
 \definecolor{primary}{HTML}{0B5394}
 \definecolor{codebg}{HTML}{F5F7FA}
 \definecolor{codekw}{HTML}{0B5394}
@@ -67,6 +69,10 @@
   {\normalfont\huge\bfseries\color{primary}}
   {\chaptertitlename\ \thechapter}{20pt}{\Huge}
 \titlespacing*{\chapter}{0pt}{0pt}{30pt}
+
+% Number section headings down to subsubsection (e.g. 6.2.1), like the
+% reference report. Paragraphs (\paragraph) stay unnumbered.
+\setcounter{secnumdepth}{3}
 
 %------------------------------------------------------------------ code listings
 \usepackage{listings}
@@ -115,6 +121,14 @@
 % Renders as a red [TODO: ...] so it can't be mistaken for finished text.
 \newcommand{\todo}[1]{\textbf{\textcolor{red}{[TODO: #1]}}}
 
+% Diagram placeholder box (until the real figure is rendered). Width is reduced
+% by the frame padding so it never overflows the text block, and vertical space
+% is finite (no [c] centering) so it never triggers "infinite glue" on a page
+% break. Usage: \figbox{<text>}
+\newcommand{\figbox}[1]{%
+  \fbox{\parbox{\dimexpr\linewidth-2\fboxsep-2\fboxrule\relax}{%
+    \vspace{1.2cm}\centering\itshape #1\par\vspace{1.2cm}}}}
+
 % Centered, captioned technology logo, placed AFTER the description paragraph.
 % Usage: \techlogo{filename}{Display Name}   (file in logo/, no extension)
 \newcommand{\techlogo}[2]{%
@@ -123,6 +137,18 @@
     \includegraphics[height=2cm,keepaspectratio]{#1}
     \caption{Logo #2}
     \label{fig:logo-#1}
+  \end{figure}}
+
+% Screenshot figure that swaps itself in automatically: if images/<name>.png
+% exists it is shown, otherwise a labeled placeholder frame appears telling the
+% author exactly which file to capture. Usage: \screenshot{<name>}{<caption>}
+\newcommand{\screenshot}[3][0.92\textwidth]{%
+  \begin{figure}[H]\centering
+    \IfFileExists{images/#2.png}
+      {\includegraphics[width=#1,height=0.62\textheight,keepaspectratio]{#2}}
+      {\figbox{Screenshot to insert: \texttt{images/\detokenize{#2}.png}, #3}}
+    \caption{#3}
+    \label{fig:#2}
   \end{figure}}
 
 %==============================================================================
@@ -139,6 +165,9 @@
 \input{frontmatter/acknowledgments}
 \cleardoublepage
 
+\input{frontmatter/abstract}
+\cleardoublepage
+
 \tableofcontents
 \cleardoublepage
 \listoffigures
@@ -153,7 +182,6 @@
 
 \input{chapters/00_general_introduction}
 \input{chapters/01_context}
-\input{chapters/02_background}
 \input{chapters/03_requirements_planning}
 \input{chapters/04_sprint1}
 \input{chapters/05_sprint2}
@@ -167,7 +195,9 @@
 \addcontentsline{toc}{chapter}{Bibliography}
 \printbibliography[title={Bibliography}]
 
-% \appendix
-% \input{chapters/99_appendix}
+\appendix
+\input{chapters/99_appendix}
+
+\input{frontmatter/backcover}
 
 \end{document}

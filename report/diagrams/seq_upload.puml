@@ -1,0 +1,18 @@
+@startuml seq_upload
+actor "Platform User" as User
+participant "Angular SPA" as FE
+participant "FastAPI Backend" as BE
+participant "MinIO\n(object store)" as S3
+database "PostgreSQL" as DB
+
+User -> FE : drag and drop file (.py / .ipynb / .zip / .csv)
+FE -> BE : POST /api/v1/projects/{id}/upload (multipart)
+BE -> BE : validate ownership + file type
+BE -> BE : detect entry script (priority order)
+BE -> S3 : put object under project key prefix
+S3 --> BE : stored (object key)
+BE -> DB : record upload metadata on project
+DB --> BE : updated project
+BE --> FE : 200 {object key, detected entry script}
+FE --> User : show uploaded file + entry script badge
+@enduml

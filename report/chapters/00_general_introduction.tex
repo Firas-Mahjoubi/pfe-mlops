@@ -20,37 +20,66 @@ fragile. Data scientists train models in notebooks, track results in
 spreadsheets or not at all, and hand artifacts to engineers who deploy them
 through ad-hoc scripts. The consequences are familiar: experiments that cannot
 be reproduced, the recurring ``it works on my machine'' failure, and slow,
-error-prone deployments. A unified platform that automates this lifecycle ---
-training, experiment tracking, model registry, deployment, and monitoring ---
-removes this friction and lets teams ship models with confidence.
+error-prone deployments. Google's reference work on \gls{mlops} describes most
+organizations as stuck at ``level 0'', a fully manual, script-driven process
+with no automation between training and serving~\cite{google_mlops}. Moving
+beyond that level requires the same engineering discipline that transformed
+software delivery: reliable, automated, observable systems built from
+well-understood components~\cite{kleppmann2017designing}. A unified platform
+that automates the lifecycle, training, experiment tracking, model registry,
+deployment, and monitoring, removes this friction and lets teams ship models
+with confidence.
 
 This report presents the design and implementation of such a platform: an
 end-to-end, self-hosted \gls{mlops} system carried out as an end-of-studies
 project (PFE) within \textbf{INSOMEA}. The platform lets a user upload code and
 data through a web interface, trigger a training pipeline that runs on a
 \gls{k8s} cluster, automatically capture metrics and artifacts, register and
-promote model versions, and deploy a chosen model as a live prediction service
-, all from a single application, with continuous deployment to a public URL.
+promote model versions, and deploy a chosen model as a live prediction service,
+all from a single application, with continuous deployment to a public URL.
+
+% ---- objectives -------------------------------------------------------------
+Concretely, the project pursues five objectives:
+
+\begin{enumerate}[leftmargin=1.8em]
+  \item \textbf{Automate training}: let a user run arbitrary uploaded code
+        (scripts or notebooks) as an isolated, reproducible job on a Kubernetes
+        cluster, without writing any infrastructure code.
+  \item \textbf{Capture every experiment}: record metrics, parameters, and
+        artifacts of every run automatically, so results are never lost and runs
+        can be compared.
+  \item \textbf{Industrialize deployment}: turn a registered model version into a
+        live, scalable prediction service in one click.
+  \item \textbf{Open models to the outside}: let external applications consume a
+        deployed model through a secured public \gls{api}, making each model a
+        reusable web service.
+  \item \textbf{Operate the platform}: provide observability of the cluster and
+        the runs, clear failure diagnostics, and an administration area for user
+        and resource management.
+\end{enumerate}
+
+The work was carried out over six months within INSOMEA's cloud engineering
+team and managed with the Scrum method: the backlog was delivered across four
+sprints, each producing a demonstrable increment that was reviewed with the
+supervisors.
 
 % ---- roadmap ---------------------------------------------------------------
 The remainder of this report is organized as follows:
 
 \begin{itemize}[leftmargin=1.4em]
-  \item \textbf{Chapter~1, General Context} introduces the host organization,
+  \item \textbf{Chapter~1, General Presentation} introduces the host organization,
         studies the existing situation and its limitations, states the problem,
-        outlines the proposed solution, and presents the Scrum method and
-        work environment adopted for the project.
-  \item \textbf{Chapter~2, MLOps Background and Technology Foundations}
-        defines the \gls{mlops} discipline, its core challenges, the enabling
-        technologies used in this work, and positions the project against
-        existing commercial solutions.
-  \item \textbf{Chapter~3, Requirements Analysis and Project Planning}
-        specifies the functional and non-functional requirements, presents the
-        global use-case model, the product backlog, the release plan over four
-        sprints, and the global system architecture.
-  \item \textbf{Chapters~4 to~7} each document one sprint, following the same
-        structure: sprint backlog, analysis and conception, realization, and
-        sprint review.
+        describes the adopted solution, presents the Scrum methodology, and sets
+        up the hardware and software environment, including the enabling
+        technologies that make up the platform's stack.
+  \item \textbf{Chapter~2, Planning and Capture of Needs} analyzes the needs
+        (actors, functional and non-functional requirements, and the use-case
+        model), presents the project management with Scrum (team, product backlog,
+        and sprint plan), and describes the application and overall project
+        architecture.
+  \item \textbf{Chapters~3 to~6} each document the study and implementation of one
+        sprint, following the same structure: sprint backlog, analysis and
+        functional specification, design, implementation, and sprint review.
   \item \textbf{General Conclusion} summarizes the results achieved, the skills
         gained, the limitations of the current system, and directions for future
         work.

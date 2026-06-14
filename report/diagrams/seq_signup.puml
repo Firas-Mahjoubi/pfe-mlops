@@ -1,0 +1,21 @@
+@startuml seq_signup
+actor User
+participant "Angular SPA" as FE
+participant "FastAPI Backend" as BE
+database "PostgreSQL" as DB
+
+User -> FE : fill sign-up form
+FE -> BE : POST /api/v1/auth/signup
+BE -> DB : check email uniqueness
+alt email available
+  BE -> BE : hash password (bcrypt)
+  BE -> DB : insert user (role = user)
+  DB --> BE : created user
+  BE -> BE : issue access + refresh JWT
+  BE --> FE : 201 {user, tokens}
+  FE --> User : redirect to dashboard
+else email already used
+  BE --> FE : 400 Email already registered
+  FE --> User : show error
+end
+@enduml

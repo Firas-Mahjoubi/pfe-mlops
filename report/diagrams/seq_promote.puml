@@ -1,0 +1,18 @@
+@startuml seq_promote
+actor "Platform User" as User
+participant "Angular SPA" as FE
+participant "FastAPI Backend" as BE
+participant "MLflow\nModel Registry" as MLF
+database "PostgreSQL" as DB
+
+User -> FE : choose new stage (Staging / Production / Archived)
+FE -> BE : POST /api/v1/models/{id}/promote {stage}
+BE -> DB : load model version + check ownership
+DB --> BE : model version
+BE -> MLF : transition model version stage
+MLF --> BE : stage updated
+BE -> DB : mirror new stage on MLModel row
+DB --> BE : updated
+BE --> FE : 200 {model, new stage}
+FE --> User : stage badge updated in registry
+@enduml

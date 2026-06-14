@@ -1,0 +1,24 @@
+@startuml uc_sprint3
+' Render to ../images/uc_sprint3.pdf
+left to right direction
+skinparam packageStyle rectangle
+skinparam shadowing false
+
+actor "Platform User\n(Data Scientist)" as User
+
+rectangle "Sprint 3 --- Registry \& Deployment" {
+  usecase "Register model"  as UC1
+  usecase "Promote model"   as UC2
+  usecase "Deploy model"    as UC3
+  usecase "Test prediction" as UC4
+}
+
+User --> UC1
+User --> UC2
+User --> UC3
+User --> UC4
+
+UC2 ..> UC1 : <<include>>
+UC3 ..> UC1 : <<include>>
+UC4 ..> UC3 : <<include>>
+@enduml

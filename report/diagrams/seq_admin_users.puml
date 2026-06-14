@@ -1,0 +1,25 @@
+@startuml seq_admin_users
+actor Administrator as Admin
+participant "Angular SPA" as FE
+participant "FastAPI Backend" as BE
+database "PostgreSQL" as DB
+
+Admin -> FE : open Administration > Users
+FE -> BE : GET /api/v1/admin/users
+BE -> BE : require_admin (role check)
+alt caller is admin
+  BE -> DB : list users + project counts
+  DB --> BE : users
+  BE --> FE : 200 [users]
+  FE --> Admin : users table (role, status, actions)
+  Admin -> FE : deactivate / promote a user
+  FE -> BE : PATCH /api/v1/admin/users/{id}
+  BE -> BE : block self-demotion / self-deactivation
+  BE -> DB : update role / is_active
+  DB --> BE : updated user
+  BE --> FE : 200 {user}
+  FE --> Admin : row updated
+else caller is not admin
+  BE --> FE : 403 Administrator privileges required
+end
+@enduml

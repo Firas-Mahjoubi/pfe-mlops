@@ -1,66 +1,124 @@
 %==============================================================================
-%  CHAPTER 4 — SPRINT 1: FOUNDATION (AUTHENTICATION & PROJECT MANAGEMENT)
+%  CHAPTER 3 — STUDY AND IMPLEMENTATION OF SPRINT 1
 %==============================================================================
-\chapter{Sprint 1 --- Foundation: Authentication and Project Management}
+\chapter{Study and Implementation of Sprint 1}
 \label{chap:sprint1}
 
 \section*{Introduction}
-The first sprint lays the foundation of the platform: a secure authentication
-system and the project entity around which all later work is organized. This
-chapter presents the sprint backlog, the analysis and conception, the realization,
-and the sprint review.
+This first sprint, \emph{Foundation}, lays the groundwork of the platform: a secure
+authentication system and the project entity around which all later work is
+organized. This chapter presents the sprint backlog, the analysis and functional
+specification, the design, the implementation, and the sprint review.
 
 % ---------------------------------------------------------------------------
 \section{Sprint Backlog}
 \begin{table}[H]\centering
+\renewcommand{\arraystretch}{1.25}
 \caption{Sprint~1 backlog}\label{tab:backlog-s1}
-\begin{tabularx}{\textwidth}{p{0.6cm} X p{2cm}}
-\toprule
+\begin{tabularx}{\textwidth}{|c|X|c|}
+\hline
 \textbf{\#} & \textbf{Task} & \textbf{Pts}\\
-\midrule
-1 & Design the user and project data model & 2\\
-1 & Implement signup / login / refresh with JWT & 3\\
-1 & Build the login and signup user interface & 2\\
-2 & Implement project CRUD with ownership checks & 3\\
-2 & Bind each project to its own tracking experiment & 1\\
-2 & Build the projects list and detail interface & 2\\
-\bottomrule
+\hline
+1 & Design the user and project data model & 2\\ \hline
+1 & Implement signup / login / refresh with JWT & 3\\ \hline
+1 & Build the login and signup user interface & 2\\ \hline
+2 & Implement project CRUD with ownership checks & 3\\ \hline
+2 & Bind each project to its own tracking experiment & 1\\ \hline
+2 & Build the projects list and detail interface & 2\\ \hline
 \end{tabularx}
 \end{table}
 
 % ---------------------------------------------------------------------------
-\section{Analysis and Conception}
+\section{Analysis and Functional Specification}
 
-\subsection{Use Cases}
+\subsection{Use Case Diagram of Sprint 1}
 This sprint covers \emph{Sign up}, \emph{Sign in}, \emph{Refresh session}, and
-\emph{Manage projects} (create, list, update, delete).
-
-\subsection{Sequence Diagram: Authentication}
-% >>> USER: render diagrams/seq_login.puml -> images/seq_login.pdf
+\emph{Manage projects} (create, list, update, delete). Figure~\ref{fig:uc-s1}
+shows the corresponding use-case diagram.
 \begin{figure}[H]\centering
-  % \includegraphics[width=0.85\textwidth]{seq_login.pdf}
-  \fbox{\parbox[c][5cm][c]{0.85\textwidth}{\centering\itshape
-    Placeholder --- insert \texttt{images/seq\_login.pdf}\\
-    (render \texttt{diagrams/seq\_login.puml})}}
+  \includegraphics[width=0.9\textwidth,height=0.72\textheight,keepaspectratio]{uc_sprint1}
+  \caption{Use-case diagram of Sprint~1}
+  \label{fig:uc-s1}
+\end{figure}
+
+\subsection{Use Case Refinement of Sprint 1}
+Tables~\ref{tab:uc-signin} and~\ref{tab:uc-projects} refine the two central use
+cases of the sprint, \emph{Sign in} and \emph{Manage projects}.
+\begin{table}[H]\centering
+\renewcommand{\arraystretch}{1.3}
+\caption{Textual description of the ``Sign in'' use case}\label{tab:uc-signin}
+\begin{tabularx}{\textwidth}{|>{\bfseries}p{3.2cm}|X|}
+\hline
+Use case & Sign in\\ \hline
+Actor & Platform user\\ \hline
+Precondition & The user already has a registered account.\\ \hline
+Post-condition & The user is authenticated and an access/refresh token pair is issued.\\ \hline
+Nominal scenario & 1.~The user submits email and password.\newline 2.~The system verifies the password against its stored hash.\newline 3.~The system issues a \gls{jwt} access token and a refresh token.\newline 4.~The user is redirected to the dashboard.\\ \hline
+Exceptions & Invalid credentials: the system rejects the request and shows an error message.\\ \hline
+\end{tabularx}
+\end{table}
+
+\begin{table}[H]\centering
+\renewcommand{\arraystretch}{1.3}
+\caption{Textual description of the ``Manage projects'' use case}\label{tab:uc-projects}
+\begin{tabularx}{\textwidth}{|>{\bfseries}p{3.2cm}|X|}
+\hline
+Use case & Manage projects\\ \hline
+Actor & Platform user\\ \hline
+Precondition & The user is authenticated.\\ \hline
+Post-condition & The user's projects reflect the requested change, and each project is bound to its own tracking experiment.\\ \hline
+Nominal scenario & 1.~The user opens the projects view and sees only their own projects.\newline 2.~The user creates a project with a name and description.\newline 3.~The system provisions a dedicated tracking experiment for the project.\newline 4.~The project appears in the list; the user can open, rename, or delete it.\\ \hline
+Exceptions & Accessing a project owned by another user: the system returns \texttt{404}, the resource is invisible to non-owners.\\ \hline
+\end{tabularx}
+\end{table}
+
+% ---------------------------------------------------------------------------
+\section{Design}
+This sprint introduces the two foundational entities of the data model,
+\texttt{User} and \texttt{Project}, described in Table~\ref{tab:entities-s1}. The
+\texttt{role} field, added with a forward-looking default of \texttt{user},
+becomes meaningful in Sprint~4 when administration is introduced.
+
+\begin{table}[H]\centering
+\renewcommand{\arraystretch}{1.25}
+\caption{Entities introduced in Sprint~1}\label{tab:entities-s1}
+\begin{tabularx}{\textwidth}{|l|l|X|}
+\hline
+\textbf{Entity} & \textbf{Attribute} & \textbf{Description}\\
+\hline
+\multirow{5}{*}{\texttt{User}}
+ & id & Unique identifier (primary key)\\ \cline{2-3}
+ & email & Unique login identifier\\ \cline{2-3}
+ & hashed\_password & bcrypt hash; the clear password is never stored\\ \cline{2-3}
+ & full\_name, is\_active & Display name; soft activation flag\\ \cline{2-3}
+ & role & \texttt{user} or \texttt{admin} (default \texttt{user})\\
+\hline
+\multirow{4}{*}{\texttt{Project}}
+ & id & Unique identifier (primary key)\\ \cline{2-3}
+ & name, description & User-chosen metadata\\ \cline{2-3}
+ & owner\_id & Reference to the owning \texttt{User}\\ \cline{2-3}
+ & experiment\_id & Identifier of the project's tracking experiment\\
+\hline
+\end{tabularx}
+\end{table}
+
+\subsection{Sequence Diagrams}
+Figure~\ref{fig:seq-signup} details the sign-up flow, and
+Figure~\ref{fig:seq-login} the login flow that every later interaction depends
+on.
+\begin{figure}[H]\centering
+  \includegraphics[width=0.9\textwidth,height=0.62\textheight,keepaspectratio]{seq_signup}
+  \caption{Sequence diagram of the sign-up flow}
+  \label{fig:seq-signup}
+\end{figure}
+\begin{figure}[H]\centering
+  \includegraphics[width=0.9\textwidth,height=0.62\textheight,keepaspectratio]{seq_login}
   \caption{Sequence diagram of the login flow}
   \label{fig:seq-login}
 \end{figure}
 
-\subsection{Data Model Increment}
-The sprint introduces two entities: \texttt{User} (unique email, hashed password,
-full name) and \texttt{Project} (name, owner reference, tracking-experiment
-identifier).
-% >>> USER: render diagrams/class_sprint1.puml -> images/class_sprint1.pdf
-\begin{figure}[H]\centering
-  % \includegraphics[width=0.6\textwidth]{class_sprint1.pdf}
-  \fbox{\parbox[c][4cm][c]{0.6\textwidth}{\centering\itshape
-    Placeholder --- \texttt{images/class\_sprint1.pdf}}}
-  \caption{Class diagram increment after Sprint~1}
-  \label{fig:class-s1}
-\end{figure}
-
 % ---------------------------------------------------------------------------
-\section{Realization}
+\section{Implementation}
 
 \subsection{Authentication with JWT}
 Authentication is stateless and based on \gls{jwt}. On login, the backend verifies
@@ -85,23 +143,62 @@ async def get_current_user(token: str = Depends(oauth2_scheme),
 A project is the organizing unit of the platform. Creating one also provisions a
 dedicated experiment in the tracking server, so that every run under the project
 is grouped automatically. All project endpoints enforce an ownership check: a user
-can only see and modify their own projects.
+can only see and modify their own projects. The check deliberately answers
+\texttt{404} rather than \texttt{403} for foreign resources, so the existence of
+another user's project is not even revealed.
+
+\subsection{Route Protection in the Frontend}
+The frontend mirrors the backend's protection with an Angular route guard: any
+route under the dashboard requires a valid session, otherwise the router
+redirects to the login page. The guard reads the authentication state from a
+central \texttt{AuthService}, which also transparently refreshes expired access
+tokens.
+
+\begin{lstlisting}[caption={Angular route guard protecting the dashboard routes.},label={lst:auth-guard}]
+export const authGuard: CanActivateFn = () => {
+  const auth = inject(AuthService);
+  const router = inject(Router);
+  return auth.isAuthenticated()
+    ? true
+    : router.createUrlTree(['/login']);
+};
+\end{lstlisting}
 
 \subsection{User Interface}
-% >>> USER: add screenshots to images/ (login + projects list) and uncomment.
-% \begin{figure}[H]\centering
-%   \includegraphics[width=\textwidth]{screenshot_login.png}
-%   \caption{Login screen}\label{fig:ui-login}
-% \end{figure}
-The frontend provides a login/signup screen and a projects view from which the
-user creates and opens projects.
+Figures~\ref{fig:screen_login} and~\ref{fig:screen_projects} show the resulting
+interface: the login/signup screen and the projects view from which the user
+creates and opens projects.
+\screenshot{screen_login}{Login screen of the platform}
+\screenshot{screen_projects}{Projects list with creation dialog}
 
 % ---------------------------------------------------------------------------
-\section{Sprint Review and Retrospective}
+\section{Testing and Validation}
+Each increment was validated manually against its acceptance scenarios before
+the sprint review. Table~\ref{tab:tests-s1} summarizes the main test scenarios of
+Sprint~1 and their outcomes.
+
+\begin{table}[H]\centering
+\renewcommand{\arraystretch}{1.25}
+\caption{Sprint~1 test scenarios}\label{tab:tests-s1}
+\begin{tabularx}{\textwidth}{|X|X|c|}
+\hline
+\textbf{Scenario} & \textbf{Expected result} & \textbf{Status}\\
+\hline
+Sign up with a new email & Account created, tokens issued, redirect to dashboard & OK\\ \hline
+Sign up with an existing email & \texttt{400} with a clear error message & OK\\ \hline
+Sign in with wrong password & \texttt{401}, no token issued & OK\\ \hline
+Call a protected endpoint without a token & \texttt{401} & OK\\ \hline
+Access token expiry & Session silently renewed via the refresh token & OK\\ \hline
+Create a project & Project stored and bound to a new tracking experiment & OK\\ \hline
+Open another user's project by its identifier & \texttt{404}, resource invisible & OK\\ \hline
+\end{tabularx}
+\end{table}
+
+% ---------------------------------------------------------------------------
+\section{Sprint Review}
 At the end of Sprint~1 the platform supports secure authentication and full
 project management, the foundation every later sprint builds upon. The burndown
 chart below tracks remaining effort across the sprint.
-% >>> USER: replace the y-values with your real remaining points per day.
 \begin{figure}[H]\centering
 \begin{tikzpicture}
 \begin{axis}[
@@ -119,6 +216,14 @@ chart below tracks remaining effort across the sprint.
 \caption{Sprint~1 burndown chart}\label{fig:burndown-s1}
 \end{figure}
 
-\noindent\textbf{Retrospective.} % >>> USER: 2--3 lines of what went well / to improve.
+\noindent\textbf{Retrospective.}
 What went well: the authentication and project foundations were delivered on
-schedule. To improve: \todo{your note}.
+schedule, and settling the token-refresh mechanism early meant no later sprint
+had to revisit session handling. To improve: too much of the first week went into
+environment setup rather than stories; the lesson, applied from Sprint~2 onward,
+was to keep a running development cluster and seed data ready before the sprint
+starts.
+
+\section*{Conclusion}
+Sprint~1 delivered the security and project foundations of the platform. The next
+sprint builds on them to upload, run, and track training jobs on the cluster.

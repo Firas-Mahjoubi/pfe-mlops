@@ -1,0 +1,28 @@
+@startuml uc_sprint4
+' Render to ../images/uc_sprint4.pdf
+left to right direction
+skinparam packageStyle rectangle
+skinparam shadowing false
+
+actor "Platform User\n(Data Scientist)" as User
+actor "External API Client" as Client
+actor "Administrator" as Admin
+
+rectangle "Sprint 4 --- Observability \& Public Serving" {
+  usecase "View metrics dashboard" as UC1
+  usecase "Manage API keys"        as UC2
+  usecase "Diagnose failed run"    as UC3
+  usecase "Call public prediction" as UC4
+  usecase "Manage users & roles"   as UC5
+  usecase "View platform overview" as UC6
+  usecase "Oversee all resources"  as UC7
+}
+
+User  --> UC1
+User  --> UC2
+User  --> UC3
+Client --> UC4
+Admin --> UC5
+Admin --> UC6
+Admin --> UC7
+@enduml

@@ -1,63 +1,138 @@
 %==============================================================================
-%  CHAPTER 5 — SPRINT 2: TRAINING PIPELINES & EXPERIMENT TRACKING
+%  CHAPTER 4 — STUDY AND IMPLEMENTATION OF SPRINT 2
 %==============================================================================
-\chapter{Sprint 2 --- Training Pipelines and Experiment Tracking}
+\chapter{Study and Implementation of Sprint 2}
 \label{chap:sprint2}
 
 \section*{Introduction}
-The second sprint delivers the heart of the platform: uploading code and data,
-running it as an isolated training job on the cluster, and automatically capturing
-the results. This chapter follows the same structure as the previous one.
+The second sprint, \emph{Training Pipelines and Experiment Tracking}, delivers the
+heart of the platform: uploading code and data, running it as an isolated training
+job on the cluster, and automatically capturing the results. This chapter follows
+the same structure as the previous one.
 
 % ---------------------------------------------------------------------------
 \section{Sprint Backlog}
 \begin{table}[H]\centering
+\renewcommand{\arraystretch}{1.25}
 \caption{Sprint~2 backlog}\label{tab:backlog-s2}
-\begin{tabularx}{\textwidth}{p{0.6cm} X p{2cm}}
-\toprule
+\begin{tabularx}{\textwidth}{|c|X|c|}
+\hline
 \textbf{\#} & \textbf{Task} & \textbf{Pts}\\
-\midrule
-3 & Upload code/dataset to object storage & 3\\
-3 & Auto-detect the entry script in an upload & 2\\
-4 & Build the training pipeline (download $\to$ run $\to$ autolog) & 5\\
-4 & Convert notebooks to scripts and inject the autolog wrapper & 3\\
-5 & Enable automatic capture of metrics, parameters, artifacts & 3\\
-6 & Stream live pipeline logs to the UI & 3\\
-7 & Build the experiments browsing interface & 3\\
-\bottomrule
+\hline
+3 & Upload code/dataset to object storage & 3\\ \hline
+3 & Auto-detect the entry script in an upload & 2\\ \hline
+4 & Build the training pipeline (download $\to$ run $\to$ autolog) & 5\\ \hline
+4 & Convert notebooks to scripts and inject the autolog wrapper & 3\\ \hline
+5 & Enable automatic capture of metrics, parameters, artifacts & 3\\ \hline
+6 & Stream live pipeline logs to the UI & 3\\ \hline
+7 & Build the experiments browsing interface & 3\\ \hline
 \end{tabularx}
 \end{table}
 
 % ---------------------------------------------------------------------------
-\section{Analysis and Conception}
+\section{Analysis and Functional Specification}
 
-\subsection{Use Cases}
+\subsection{Use Case Diagram of Sprint 2}
 This sprint covers \emph{Upload code and data}, \emph{Trigger a training run},
 \emph{Watch live logs}, and \emph{Browse experiment runs}.
-
-\subsection{Sequence Diagram: Triggering a Training Run}
-% >>> USER: render diagrams/seq_training.puml -> images/seq_training.pdf
+Figure~\ref{fig:uc-s2} shows the use-case diagram.
 \begin{figure}[H]\centering
-  % \includegraphics[width=\textwidth]{seq_training.pdf}
-  \fbox{\parbox[c][5.5cm][c]{\textwidth}{\centering\itshape
-    Placeholder --- insert \texttt{images/seq\_training.pdf}\\
-    (render \texttt{diagrams/seq\_training.puml})}}
+  \includegraphics[width=0.9\textwidth,height=0.72\textheight,keepaspectratio]{uc_sprint2}
+  \caption{Use-case diagram of Sprint~2}
+  \label{fig:uc-s2}
+\end{figure}
+
+\subsection{Use Case Refinement of Sprint 2}
+Tables~\ref{tab:uc-train} and~\ref{tab:uc-browse} refine the \emph{Trigger a
+training run} and \emph{Browse experiment runs} use cases.
+\begin{table}[H]\centering
+\renewcommand{\arraystretch}{1.3}
+\caption{Textual description of the ``Trigger a training run'' use case}\label{tab:uc-train}
+\begin{tabularx}{\textwidth}{|>{\bfseries}p{3.2cm}|X|}
+\hline
+Use case & Trigger a training run\\ \hline
+Actor & Platform user\\ \hline
+Precondition & The user is authenticated and has uploaded code (and optionally a dataset) to a project.\\ \hline
+Post-condition & A pipeline run executes on the cluster and its metrics, parameters, and artifacts are recorded.\\ \hline
+Nominal scenario & 1.~The user clicks ``Run code''.\newline 2.~The backend submits a pipeline to the orchestrator.\newline 3.~An isolated pod downloads the code, installs dependencies, and runs the entry script.\newline 4.~The autolog wrapper records results to the tracking server.\newline 5.~The user follows the live logs and the captured metrics.\\ \hline
+Exceptions & The script fails: the error is captured and surfaced to the user; no model is registered.\\ \hline
+\end{tabularx}
+\end{table}
+
+\begin{table}[H]\centering
+\renewcommand{\arraystretch}{1.3}
+\caption{Textual description of the ``Browse experiment runs'' use case}\label{tab:uc-browse}
+\begin{tabularx}{\textwidth}{|>{\bfseries}p{3.2cm}|X|}
+\hline
+Use case & Browse experiment runs\\ \hline
+Actor & Platform user\\ \hline
+Precondition & The user is authenticated and at least one run has executed in the project.\\ \hline
+Post-condition & The user has inspected the metrics, parameters, and artifacts of past runs.\\ \hline
+Nominal scenario & 1.~The user opens the experiments view of a project.\newline 2.~The system lists the project's runs with status and headline metrics.\newline 3.~The user opens a run and inspects its metrics, parameters, and artifacts.\newline 4.~The user compares values across runs to select the best model.\\ \hline
+Exceptions & The tracking server is unreachable: the system shows a clear error instead of an empty list.\\ \hline
+\end{tabularx}
+\end{table}
+
+% ---------------------------------------------------------------------------
+\section{Design}
+This sprint adds the \texttt{PipelineRun} entity, described in
+Table~\ref{tab:entities-s2}. It is the platform's own record of a training
+execution; the run's scientific results (metrics, parameters, artifacts) live in
+the tracking server, linked through the experiment identifier of the project.
+
+\begin{table}[H]\centering
+\renewcommand{\arraystretch}{1.25}
+\caption{Entity introduced in Sprint~2}\label{tab:entities-s2}
+\begin{tabularx}{\textwidth}{|l|l|X|}
+\hline
+\textbf{Entity} & \textbf{Attribute} & \textbf{Description}\\
+\hline
+\multirow{5}{*}{\texttt{PipelineRun}}
+ & id & Unique identifier (primary key)\\ \cline{2-3}
+ & project\_id & Reference to the owning \texttt{Project}\\ \cline{2-3}
+ & kfp\_run\_id & Identifier of the run in the pipeline orchestrator\\ \cline{2-3}
+ & status & Pending, running, succeeded, or failed\\ \cline{2-3}
+ & created\_at, finished\_at & Lifecycle timestamps\\
+\hline
+\end{tabularx}
+\end{table}
+
+\subsection{Sequence Diagrams}
+Figure~\ref{fig:seq-upload} details the upload flow that feeds the pipeline, and
+Figure~\ref{fig:seq-training} the training-run flow itself.
+\begin{figure}[H]\centering
+  \includegraphics[width=0.9\textwidth,height=0.62\textheight,keepaspectratio]{seq_upload}
+  \caption{Sequence diagram of uploading code and data to a project}
+  \label{fig:seq-upload}
+\end{figure}
+\begin{figure}[H]\centering
+  \includegraphics[width=0.9\textwidth,height=0.62\textheight,keepaspectratio]{seq_training}
   \caption{Sequence diagram of triggering a custom-code training run}
   \label{fig:seq-training}
 \end{figure}
 
-\subsection{Data Model Increment}
-The sprint adds the \texttt{PipelineRun} entity (pipeline run identifier, status,
-parameters, timestamps) linked to a project.
-
 % ---------------------------------------------------------------------------
-\section{Realization}
+\section{Implementation}
 
 \subsection{Upload and Storage}
 Uploaded files are stored in the object store under a key derived from the project
 and a short unique prefix. The backend supports plain scripts, notebooks, and
-archives, and can auto-detect the entry script when one is not specified, following
-a fixed priority order.
+archives, and can auto-detect the entry script when one is not specified,
+following a fixed priority order: an explicit user choice always wins, then
+conventional names such as \texttt{main.py} or \texttt{train.py}, then the only
+script present, and finally the notebook if nothing else qualifies.
+
+\begin{lstlisting}[language=Python,caption={Entry-script auto-detection follows a fixed priority order.},label={lst:entrypoint}]
+def detect_entry_script(files: list[str]) -> str | None:
+    scripts = [f for f in files if f.endswith(".py")]
+    for preferred in ("main.py", "train.py", "app.py"):
+        if preferred in scripts:
+            return preferred
+    if len(scripts) == 1:
+        return scripts[0]
+    notebooks = [f for f in files if f.endswith(".ipynb")]
+    return notebooks[0] if notebooks else None
+\end{lstlisting}
 
 \subsection{The Training Pipeline}
 A training run is expressed as a small pipeline that executes inside an isolated
@@ -76,11 +151,15 @@ runpy.run_path("user_script.py", run_name="__main__")
 \end{lstlisting}
 
 \subsection{Robust Notebook Handling}
-Because real-world notebooks are rarely written for headless execution, the runner
-includes several robustness measures: it strips interactive notebook magics during
-conversion, neutralizes blocking calls, and provides compatibility shims for
-runtime-only modules so that code exported from cloud notebook environments runs
-unchanged.
+Because real-world notebooks are rarely written for headless execution, the
+runner includes several robustness measures. Notebooks are converted to scripts
+with \texttt{nbconvert}~\cite{nbconvert_docs}; during conversion the runner
+strips interactive notebook magics, neutralizes blocking calls such as
+\texttt{plt.show()} and \texttt{input()}, and installs compatibility shims for
+runtime-only modules (for example \texttt{google.colab}) so that code exported
+from cloud notebook environments runs unchanged. Missing imports are detected and
+installed inside the pod before execution, with version pins for packages whose
+latest releases are known to conflict.
 
 \subsection{Live Logs}
 While a run executes, the backend reads the pod's logs from the cluster and streams
@@ -89,12 +168,36 @@ them to the interface, so the user watches training progress in real time. The
 server with no changes to the user's code.
 
 \subsection{User Interface}
-% >>> USER: screenshots: upload view, live-log terminal, experiments list.
 The interface offers a drag-and-drop upload area, a live log terminal, and an
-experiments view listing each run with its captured metrics.
+experiments view listing each run with its captured metrics
+(Figures~\ref{fig:screen_upload} to~\ref{fig:screen_experiments}).
+\screenshot{screen_upload}{Drag-and-drop upload area of a project}
+\screenshot{screen_logs}{Live log terminal during a training run}
+\screenshot{screen_experiments}{Experiments view with captured metrics}
 
 % ---------------------------------------------------------------------------
-\section{Sprint Review and Retrospective}
+\section{Testing and Validation}
+Table~\ref{tab:tests-s2} summarizes the main test scenarios of Sprint~2.
+
+\begin{table}[H]\centering
+\renewcommand{\arraystretch}{1.25}
+\caption{Sprint~2 test scenarios}\label{tab:tests-s2}
+\begin{tabularx}{\textwidth}{|X|X|c|}
+\hline
+\textbf{Scenario} & \textbf{Expected result} & \textbf{Status}\\
+\hline
+Upload a \texttt{.py} script & Stored in the object store, set as entry script & OK\\ \hline
+Upload a \texttt{.zip} archive without specifying an entry script & Entry script auto-detected by priority order & OK\\ \hline
+Run a scikit-learn script & Run succeeds; metrics, parameters, and model captured automatically & OK\\ \hline
+Run a real-world Colab notebook & Notebook converted, shims applied, run succeeds & OK\\ \hline
+Run a script with a missing dependency & Dependency installed in the pod before execution & OK\\ \hline
+Run a script that raises an exception & Run marked failed; error surfaced to the user & OK\\ \hline
+Watch logs during a run & Log lines stream to the browser while the pod executes & OK\\ \hline
+\end{tabularx}
+\end{table}
+
+% ---------------------------------------------------------------------------
+\section{Sprint Review}
 At the end of Sprint~2 a user can upload arbitrary code, run it on the cluster, and
 see metrics and artifacts captured automatically, the platform now \emph{trains
 and tracks}.
@@ -115,6 +218,14 @@ and tracks}.
 \caption{Sprint~2 burndown chart}\label{fig:burndown-s2}
 \end{figure}
 
-\noindent\textbf{Retrospective.} % >>> USER
-The training and tracking pipeline was the most technically demanding increment;
-handling messy real-world notebooks required extra robustness work. \todo{your note}.
+\noindent\textbf{Retrospective.}
+What went well: the autolog wrapper proved the right abstraction, users get full
+experiment tracking without changing a line of their code. To improve: the
+training and tracking pipeline was the most technically demanding increment, and
+handling messy real-world notebooks (runtime-only modules, conflicting
+dependency versions) consumed more time than estimated; the diagnostics work
+later scheduled in Sprint~4 was a direct consequence of this experience.
+
+\section*{Conclusion}
+Sprint~2 turned the platform into a working training-and-tracking engine. The next
+sprint makes the resulting models deployable and queryable.

@@ -68,7 +68,12 @@ import { AuthBgComponent } from './auth-bg.component';
         <div class="auth-mesh-mobile md:hidden" aria-hidden="true"></div>
         <app-auth-bg class="md:hidden auth-bg-mobile" aria-hidden="true"></app-auth-bg>
 
+        <!-- desktop ambience behind the card so the pane isn't flat black -->
+        <div class="auth-form-glow hidden md:block" aria-hidden="true"></div>
+        <div class="auth-form-grid hidden md:block" aria-hidden="true"></div>
+
         <div class="relative z-10 w-full max-w-sm auth-card rounded-2xl p-6 sm:p-7 animate-fade-in">
+          <div class="auth-card-glow" aria-hidden="true"></div>
           <!-- mobile brand (sm-down only) -->
           <div class="md:hidden flex items-center gap-2 mb-5">
             <app-logo className="w-6 h-6"></app-logo>
@@ -152,6 +157,28 @@ import { AuthBgComponent } from './auth-bg.component';
         radial-gradient(circle at 50% 100%, rgba(133, 244, 255, 0.08), transparent 60%);
     }
 
+    /* ── Form-pane ambience (desktop) so the right side isn't dead ──── */
+    .auth-form-glow {
+      position: absolute; inset: 0; pointer-events: none; z-index: 0;
+      background:
+        radial-gradient(46% 52% at 62% 42%, rgba(66, 194, 255, 0.16), transparent 72%),
+        radial-gradient(40% 44% at 38% 78%, rgba(133, 244, 255, 0.10), transparent 72%);
+      filter: blur(8px);
+      animation: formGlow 16s ease-in-out infinite alternate;
+      will-change: transform, opacity;
+    }
+    @keyframes formGlow {
+      0%   { transform: translate3d(0, 0, 0) scale(1);    opacity: 0.85; }
+      100% { transform: translate3d(14px, -18px, 0) scale(1.06); opacity: 1; }
+    }
+    .auth-form-grid {
+      position: absolute; inset: 0; pointer-events: none; z-index: 0;
+      background-image: radial-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+      background-size: 24px 24px;
+      -webkit-mask-image: radial-gradient(120% 90% at 60% 45%, black 8%, transparent 62%);
+              mask-image: radial-gradient(120% 90% at 60% 45%, black 8%, transparent 62%);
+    }
+
     /* ── Brand mark subtle entrance ─────────────────────────────────── */
     .brand-pop { animation: fadeIn 0.5s ease-out both; }
 
@@ -204,6 +231,46 @@ import { AuthBgComponent } from './auth-bg.component';
       background: linear-gradient(90deg, transparent, rgba(133, 244, 255, 0.6), transparent);
       border-top-left-radius: inherit; border-top-right-radius: inherit;
     }
+    /* inner top radial highlight so the card "catches light" */
+    :host ::ng-deep .auth-card > * { position: relative; z-index: 1; }
+    :host ::ng-deep .auth-card .auth-card-glow {
+      content: ""; position: absolute; inset: 0; border-radius: inherit; z-index: 0;
+      pointer-events: none;
+      background: radial-gradient(120% 60% at 50% -10%, rgba(66, 194, 255, 0.12), transparent 60%);
+    }
+
+    /* ── Brand glyph tile inside the card ───────────────────────────── */
+    :host ::ng-deep .auth-glyph {
+      width: 2.5rem; height: 2.5rem; border-radius: 0.75rem;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: linear-gradient(150deg, rgba(66, 194, 255, 0.22), rgba(133, 244, 255, 0.06));
+      border: 1px solid rgba(66, 194, 255, 0.30);
+      box-shadow: 0 8px 22px rgba(66, 194, 255, 0.18), 0 1px 0 rgba(255,255,255,0.06) inset;
+    }
+
+    /* ── Premium submit button (cyan gradient + glow) ───────────────── */
+    :host ::ng-deep .auth-submit {
+      background-image: linear-gradient(180deg, #6fd3ff, #42C2FF) !important;
+      box-shadow: 0 8px 22px rgba(66, 194, 255, 0.35), 0 1px 0 rgba(255,255,255,0.25) inset;
+      transition: box-shadow 200ms ease, transform 120ms ease, filter 200ms ease;
+    }
+    :host ::ng-deep .auth-submit:hover:not(:disabled) {
+      box-shadow: 0 10px 30px rgba(66, 194, 255, 0.55);
+      filter: brightness(1.05);
+    }
+    :host ::ng-deep .auth-submit:active:not(:disabled) { transform: translateY(1px); }
+
+    /* ── Trust footer line ──────────────────────────────────────────── */
+    :host ::ng-deep .auth-trust {
+      display: flex; align-items: center; justify-content: center; gap: 0.4rem;
+      font-size: 10.5px; color: var(--color-ink3);
+    }
+    :host ::ng-deep .auth-trust::before,
+    :host ::ng-deep .auth-trust::after {
+      content: ""; height: 1px; flex: 1; max-width: 2.5rem;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.14));
+    }
+    :host ::ng-deep .auth-trust::after { transform: scaleX(-1); }
 
     /* Form-card entrance */
     .animate-fade-in { animation: fadeIn 0.5s ease-out both; }
@@ -212,11 +279,25 @@ import { AuthBgComponent } from './auth-bg.component';
       to   { opacity: 1; transform: translateY(0); }
     }
 
+    /* Staggered entrance for the card's content rows */
+    :host ::ng-deep .auth-stagger > * { animation: rowIn 0.5s ease-out both; }
+    :host ::ng-deep .auth-stagger > *:nth-child(1) { animation-delay: 0.05s; }
+    :host ::ng-deep .auth-stagger > *:nth-child(2) { animation-delay: 0.11s; }
+    :host ::ng-deep .auth-stagger > *:nth-child(3) { animation-delay: 0.17s; }
+    :host ::ng-deep .auth-stagger > *:nth-child(4) { animation-delay: 0.23s; }
+    :host ::ng-deep .auth-stagger > *:nth-child(5) { animation-delay: 0.29s; }
+    :host ::ng-deep .auth-stagger > *:nth-child(6) { animation-delay: 0.35s; }
+    @keyframes rowIn {
+      from { opacity: 0; transform: translateY(7px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
     /* ── Respect users who don't want motion ────────────────────────── */
     @media (prefers-reduced-motion: reduce) {
       .auth-orbs, .auth-floor-grid, .float-a, .float-b, .float-c,
-      .animate-fade-in, .brand-pop { animation: none; }
+      .animate-fade-in, .brand-pop, .auth-form-glow { animation: none; }
       :host ::ng-deep .auth-tile { transform: none; }
+      :host ::ng-deep .auth-stagger > * { animation: none; }
     }
   `],
 })

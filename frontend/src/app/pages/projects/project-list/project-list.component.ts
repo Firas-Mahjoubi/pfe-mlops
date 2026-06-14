@@ -209,7 +209,7 @@ type ViewMode = 'table' | 'grid';
         ></app-confirm-dialog>
       }
 
-      <!-- danger zone -->
+      <!-- danger zone — temporarily hidden for screenshots; restore to re-enable
       <div class="mt-6 rounded-lg border border-bad/20 bg-bad/[0.03] p-4">
         <div class="flex items-center justify-between">
           <div>
@@ -224,6 +224,8 @@ type ViewMode = 'table' | 'grid';
           </div>
         }
       </div>
+      -->
+      <!-- end danger zone -->
 
       <!-- create modal -->
       @if (showCreateModal) {

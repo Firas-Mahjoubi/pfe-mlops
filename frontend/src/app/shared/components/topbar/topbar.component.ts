@@ -74,7 +74,7 @@ interface Crumb { label: string; url?: string; active?: boolean; }
             <div class="w-7 h-7 rounded-full bg-gradient-to-br from-cyan3 to-violet text-[#06121A] text-[11px] font-bold flex items-center justify-center">{{ initial(user.full_name || user.email) }}</div>
             <div class="text-[12px] leading-tight hidden md:block">
               <div class="text-ink">{{ user.full_name || user.email }}</div>
-              <div class="text-ink3 text-[10.5px]">Member</div>
+              <div class="text-[10.5px]" [class]="user.role === 'admin' ? 'text-cyan3 font-medium' : 'text-ink3'">{{ user.role === 'admin' ? 'Admin' : 'Member' }}</div>
             </div>
             <button
               (click)="authService.logout()"

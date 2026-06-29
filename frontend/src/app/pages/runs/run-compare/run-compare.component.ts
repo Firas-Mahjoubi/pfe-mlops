@@ -41,6 +41,28 @@ import { ExperimentService, MlflowRun } from '../../../core/services/experiment.
         </div>
       } @else {
 
+        <!-- Overall winner banner -->
+        @if (winner(); as w) {
+          <div class="relative overflow-hidden rounded-xl border p-4 mb-5" [style.border-color]="w.color">
+            <div class="absolute -top-10 -right-10 w-36 h-36 rounded-full blur-3xl pointer-events-none opacity-20" [style.background]="w.color"></div>
+            <div class="relative flex items-center gap-3.5">
+              <div class="w-11 h-11 rounded-xl bg-amber-400/15 border border-amber-400/30 flex items-center justify-center shrink-0">
+                <svg class="w-5 h-5 text-amber-300" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                </svg>
+              </div>
+              <div class="min-w-0">
+                <div class="text-[10.5px] font-semibold tracking-[0.1em] uppercase text-ink3">Overall winner</div>
+                <div class="text-[15px] font-semibold text-ink truncate" [style.color]="w.color">{{ w.name }}</div>
+              </div>
+              <div class="ml-auto text-right shrink-0">
+                <div class="mono text-[15px] font-semibold text-ink">{{ w.wins }} / {{ w.total }}</div>
+                <div class="text-[10.5px] text-ink3">metrics won</div>
+              </div>
+            </div>
+          </div>
+        }
+
         <!-- Run identity cards -->
         <div class="grid gap-3 mb-5" [style.grid-template-columns]="'auto repeat(' + runs.length + ', 1fr)'">
           <div></div>
@@ -266,6 +288,34 @@ export class RunCompareComponent implements OnInit {
 
   runColor(idx: number): string {
     return this.palette[idx % this.palette.length].solid;
+  }
+
+  // The run that is best on the most metrics (ties don't count for anyone).
+  winner(): { name: string; color: string; wins: number; total: number } | null {
+    if (this.runs.length < 2 || this.allMetricKeys.length === 0) return null;
+    const wins = this.runs.map(() => 0);
+    for (const metric of this.allMetricKeys) {
+      const values = this.runs.map((r) => this.getMetricValue(r, metric));
+      const present = values.filter((v): v is number => v !== null);
+      if (present.length < 2) continue;
+      const lowerIsBetter = /loss|error|rmse|mae/i.test(metric);
+      const best = lowerIsBetter ? Math.min(...present) : Math.max(...present);
+      const leaders = values.reduce<number[]>((acc, v, i) => {
+        if (v === best) acc.push(i);
+        return acc;
+      }, []);
+      if (leaders.length === 1) wins[leaders[0]]++; // sole leader only
+    }
+    let topIdx = 0;
+    for (let i = 1; i < wins.length; i++) if (wins[i] > wins[topIdx]) topIdx = i;
+    if (wins[topIdx] === 0) return null;
+    const run = this.runs[topIdx];
+    return {
+      name: run.info.run_name || run.info.run_id.substring(0, 8),
+      color: this.runColor(topIdx),
+      wins: wins[topIdx],
+      total: this.allMetricKeys.length,
+    };
   }
 
   private buildKeys(): void {

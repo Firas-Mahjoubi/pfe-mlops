@@ -33,6 +33,18 @@ interface LogLine {
   message: string;
 }
 
+// A "model" (logical experiment) groups all the runs that trained the same
+// algorithm so they can be ranked against each other instead of listed flat.
+interface ExperimentGroup {
+  key: string;          // model-family label, e.g. "XGBoost"
+  runs: MlflowRun[];    // sorted: best primary metric first
+  bestRun: MlflowRun;   // the leading run inside this group
+  primaryKey: string;   // metric used to rank, e.g. "f1_score"
+  primaryValue: number; // best value of that metric in the group
+  lowerIsBetter: boolean;
+  rank: number;         // 1-based, assigned after sorting groups
+}
+
 @Component({
   selector: 'app-project-detail',
   standalone: true,
@@ -363,19 +375,67 @@ interface LogLine {
                 <p class="text-[12.5px] text-ink3">Upload your training code and trigger a pipeline to see results here.</p>
               </div>
             } @else {
-              <!-- Metrics chart -->
-              @if (runs.length >= 1 && experimentsChartData.datasets.length > 0) {
-                <div class="bg-card border border-line rounded-xl p-5 mb-5">
-                  <div class="flex items-center justify-between mb-4">
-                    <div>
-                      <div class="text-[11px] font-semibold tracking-[0.08em] uppercase text-ink3">Metrics Across Runs</div>
-                      <div class="text-[12px] text-ink2 mt-0.5">Last {{ experimentsChartData.datasets[0]?.data?.length || 0 }} finished runs</div>
+              <!-- Champion banner: highest-ranked model -->
+              @if (bestGroup(); as best) {
+                <div class="relative overflow-hidden rounded-xl border border-cyan3/30 bg-gradient-to-br from-cyan3/[0.07] via-card to-violet/[0.06] p-5 mb-5">
+                  <div class="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-cyan3/10 blur-3xl pointer-events-none"></div>
+                  <div class="relative flex items-center justify-between gap-5 flex-wrap">
+                    <div class="flex items-center gap-4 min-w-0">
+                      <div class="w-12 h-12 rounded-xl bg-amber-400/15 border border-amber-400/30 flex items-center justify-center shrink-0">
+                        <svg class="w-6 h-6 text-amber-300" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                        </svg>
+                      </div>
+                      <div class="min-w-0">
+                        <div class="text-[10.5px] font-semibold tracking-[0.1em] uppercase text-cyan3">Best model</div>
+                        <div class="text-[20px] font-semibold text-ink leading-tight truncate">{{ best.key }}</div>
+                        <div class="flex items-center gap-2 mt-1">
+                          <div class="flex items-center gap-0.5">
+                            @for (s of [1,2,3,4,5]; track s) {
+                              <svg class="w-3.5 h-3.5" [class]="s <= groupStars(best) ? 'text-amber-300' : 'text-ink3/25'" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                              </svg>
+                            }
+                          </div>
+                          <span class="text-[11.5px] text-ink3">· best of {{ best.runs.length }} run{{ best.runs.length !== 1 ? 's' : '' }}</span>
+                        </div>
+                      </div>
                     </div>
-                    <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-5">
+                      <div class="text-right">
+                        <div class="text-[28px] font-semibold mono text-ink leading-none">{{ best.primaryValue.toFixed(4) }}</div>
+                        <div class="text-[11px] text-ink3 mt-1.5">{{ metricLabel(best.primaryKey) }}</div>
+                      </div>
+                      <button (click)="selectedRun = best.bestRun"
+                        class="inline-flex items-center gap-1.5 px-3.5 py-2 text-[12.5px] font-medium rounded-lg bg-cyan3/10 border border-cyan3/40 text-cyan3 hover:bg-cyan3/20 transition-colors">
+                        View best run
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="relative text-[11.5px] text-ink3 mt-3.5 pt-3.5 border-t border-white/5">
+                    {{ experimentGroups.length }} model{{ experimentGroups.length !== 1 ? 's' : '' }} ·
+                    {{ runs.length }} run{{ runs.length !== 1 ? 's' : '' }} ·
+                    {{ finishedRunsCount() }} finished
+                  </div>
+                </div>
+              }
+
+              <!-- Best-metrics-by-model chart -->
+              @if (experimentsChartData.datasets.length > 0) {
+                <div class="bg-card border border-line rounded-xl p-5 mb-5">
+                  <div class="flex items-center justify-between mb-4 gap-4 flex-wrap">
+                    <div>
+                      <div class="text-[11px] font-semibold tracking-[0.08em] uppercase text-ink3">Best Metrics by Model</div>
+                      <div class="text-[12px] text-ink2 mt-0.5">Each bar is a model's best value across its runs</div>
+                    </div>
+                    <div class="flex items-center gap-3 flex-wrap">
                       @for (ds of experimentsChartData.datasets; track ds.label) {
                         <div class="flex items-center gap-1.5">
                           <div class="w-2.5 h-2.5 rounded-sm" [style.background]="ds.backgroundColor?.toString()"></div>
-                          <span class="text-[11px] text-ink2 mono">{{ ds.label }}</span>
+                          <span class="text-[11px] text-ink2">{{ ds.label }}</span>
                         </div>
                       }
                     </div>
@@ -391,10 +451,11 @@ interface LogLine {
                 </div>
               }
 
-              <!-- Table header bar -->
-              <div class="flex items-center justify-between mb-3">
+              <!-- Leaderboard header bar -->
+              <div class="flex items-center justify-between mb-3 gap-3 flex-wrap">
                 <div class="flex items-center gap-2">
-                  <span class="text-[12.5px] text-ink2">{{ runs.length }} run{{ runs.length !== 1 ? 's' : '' }}</span>
+                  <span class="text-[13px] font-semibold text-ink">Leaderboard</span>
+                  <span class="text-[12px] text-ink3">{{ experimentGroups.length }} model{{ experimentGroups.length !== 1 ? 's' : '' }}, ranked by best score</span>
                   @if (selectedRunIds.size > 0) {
                     <span class="mono text-[11px] px-2 py-0.5 rounded bg-cyan3/10 border border-cyan3/30 text-cyan3">
                       {{ selectedRunIds.size }} selected
@@ -416,72 +477,127 @@ interface LogLine {
                 </button>
               </div>
 
-              <!-- Run table -->
-              <div class="bg-card border border-line rounded-xl overflow-x-auto">
-                <table class="w-full min-w-[760px]">
-                  <thead>
-                    <tr class="border-b border-line">
-                      <th class="px-4 py-2.5 w-10">
-                        <!-- select all -->
-                      </th>
-                      <th class="text-left px-4 py-2.5 text-[10.5px] font-semibold tracking-[0.07em] uppercase text-ink3">Run</th>
-                      <th class="text-left px-4 py-2.5 text-[10.5px] font-semibold tracking-[0.07em] uppercase text-ink3">Status</th>
-                      <th class="text-left px-4 py-2.5 text-[10.5px] font-semibold tracking-[0.07em] uppercase text-ink3">Top Metrics</th>
-                      <th class="text-right px-4 py-2.5 text-[10.5px] font-semibold tracking-[0.07em] uppercase text-ink3">Duration</th>
-                      <th class="text-right px-4 py-2.5 text-[10.5px] font-semibold tracking-[0.07em] uppercase text-ink3">Started</th>
-                      <th class="w-10"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    @for (run of runs; track run.info.run_id) {
-                      <tr class="border-b border-line/60 hover:bg-white/[0.015] cursor-pointer transition-colors group" (click)="selectedRun = run">
-                        <td class="px-4 py-3" (click)="$event.stopPropagation()">
-                          <input
-                            type="checkbox"
-                            [checked]="selectedRunIds.has(run.info.run_id)"
-                            (change)="toggleRunSelection(run.info.run_id)"
-                            class="w-3.5 h-3.5 rounded bg-raised border-line text-cyan3 focus:ring-cyan3 focus:ring-1 focus:ring-offset-0"
-                          />
-                        </td>
-                        <td class="px-4 py-3">
-                          <div class="text-[13px] font-medium text-ink leading-tight">
-                            {{ run.info.run_name || run.info.run_id.substring(0, 8) }}
-                          </div>
-                          <div class="mono text-[10.5px] text-ink3 mt-0.5">{{ run.info.run_id.substring(0, 12) }}</div>
-                        </td>
-                        <td class="px-4 py-3">
-                          <span [class]="getStatusClass(run.info.status)" class="text-[11px]">
-                            {{ run.info.status }}
+              <!-- Ranked model groups (collapsible) -->
+              <div class="space-y-2.5">
+                @for (group of experimentGroups; track group.key) {
+                  <div class="bg-card border rounded-xl overflow-hidden transition-colors"
+                    [ngClass]="group.rank === 1 ? 'border-cyan3/30' : 'border-line'">
+                    <!-- Group header -->
+                    <button (click)="toggleGroup(group.key)"
+                      class="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/[0.015] text-left transition-colors">
+                      <span class="inline-flex items-center justify-center w-7 h-7 rounded-lg border text-[12px] font-bold mono shrink-0"
+                        [ngClass]="rankBadgeClass(group.rank)">{{ group.rank }}</span>
+                      <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-2 flex-wrap">
+                          <span class="text-[14px] font-semibold text-ink truncate">{{ group.key }}</span>
+                          @if (group.rank === 1) {
+                            <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold tracking-wide bg-amber-400/15 border border-amber-400/30 text-amber-300">BEST</span>
+                          }
+                          <span class="mono text-[10.5px] px-1.5 py-0.5 rounded bg-white/[0.04] border border-line text-ink3">
+                            {{ group.runs.length }} run{{ group.runs.length !== 1 ? 's' : '' }}
                           </span>
-                        </td>
-                        <td class="px-4 py-3">
-                          <div class="flex flex-wrap gap-1.5">
-                            @for (metric of getTopMetrics(run); track metric.key) {
-                              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white/[0.04] border border-line text-[11px]">
-                                <span class="text-ink3">{{ metric.key }}</span>
-                                <span class="mono text-ink font-medium">{{ metric.value.toFixed(4) }}</span>
-                              </span>
+                        </div>
+                        @if (group.primaryKey) {
+                          <div class="flex items-center gap-0.5 mt-1">
+                            @for (s of [1,2,3,4,5]; track s) {
+                              <svg class="w-3 h-3" [class]="s <= groupStars(group) ? 'text-amber-300' : 'text-ink3/25'" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                              </svg>
                             }
                           </div>
-                        </td>
-                        <td class="px-4 py-3 mono text-[12px] text-ink2 text-right">
-                          {{ getDuration(run) }}
-                        </td>
-                        <td class="px-4 py-3 text-[12px] text-ink3 text-right whitespace-nowrap">
-                          {{ run.info.start_time | date:'MMM d, HH:mm' }}
-                        </td>
-                        <td class="px-4 py-3" (click)="$event.stopPropagation()">
-                          <button (click)="promptDeleteExpRun(run.info.run_id, run.info.run_name)"
-                            class="opacity-0 group-hover:opacity-100 text-ink3 hover:text-bad transition-all p-1">
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                            </svg>
-                          </button>
-                        </td>
-                      </tr>
+                        }
+                      </div>
+                      <div class="text-right shrink-0">
+                        @if (group.primaryKey) {
+                          <div class="mono text-[15px] font-semibold text-ink">{{ group.primaryValue.toFixed(4) }}</div>
+                          <div class="text-[10.5px] text-ink3">{{ metricLabel(group.primaryKey) }}</div>
+                        } @else {
+                          <div class="text-[11px] text-ink3">no metrics</div>
+                        }
+                      </div>
+                      <svg class="w-4 h-4 text-ink3 transition-transform shrink-0" [class.rotate-90]="expandedGroups.has(group.key)" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                      </svg>
+                    </button>
+
+                    <!-- Group runs -->
+                    @if (expandedGroups.has(group.key)) {
+                      <div class="border-t border-line overflow-x-auto">
+                        <table class="w-full min-w-[760px]">
+                          <thead>
+                            <tr class="border-b border-line/60">
+                              <th class="px-4 py-2 w-10"></th>
+                              <th class="text-left px-4 py-2 text-[10.5px] font-semibold tracking-[0.07em] uppercase text-ink3">Run</th>
+                              <th class="text-left px-4 py-2 text-[10.5px] font-semibold tracking-[0.07em] uppercase text-ink3">Status</th>
+                              <th class="text-left px-4 py-2 text-[10.5px] font-semibold tracking-[0.07em] uppercase text-ink3">Top Metrics</th>
+                              <th class="text-right px-4 py-2 text-[10.5px] font-semibold tracking-[0.07em] uppercase text-ink3">Duration</th>
+                              <th class="text-right px-4 py-2 text-[10.5px] font-semibold tracking-[0.07em] uppercase text-ink3">Started</th>
+                              <th class="w-10"></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            @for (run of group.runs; track run.info.run_id) {
+                              <tr class="border-b border-line/40 last:border-0 hover:bg-white/[0.015] cursor-pointer transition-colors group/row" (click)="selectedRun = run">
+                                <td class="px-4 py-3" (click)="$event.stopPropagation()">
+                                  <input
+                                    type="checkbox"
+                                    [checked]="selectedRunIds.has(run.info.run_id)"
+                                    (change)="toggleRunSelection(run.info.run_id)"
+                                    class="w-3.5 h-3.5 rounded bg-raised border-line text-cyan3 focus:ring-cyan3 focus:ring-1 focus:ring-offset-0"
+                                  />
+                                </td>
+                                <td class="px-4 py-3">
+                                  <div class="flex items-center gap-1.5">
+                                    @if (run.info.run_id === group.bestRun.info.run_id && group.primaryKey) {
+                                      <svg class="w-3.5 h-3.5 text-amber-300 shrink-0" fill="currentColor" viewBox="0 0 20 20" title="Best run in this model">
+                                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                                      </svg>
+                                    }
+                                    <div class="min-w-0">
+                                      <div class="text-[13px] font-medium text-ink leading-tight truncate">
+                                        {{ run.info.run_name || run.info.run_id.substring(0, 8) }}
+                                      </div>
+                                      <div class="mono text-[10.5px] text-ink3 mt-0.5">{{ run.info.run_id.substring(0, 12) }}</div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td class="px-4 py-3">
+                                  <span [class]="getStatusClass(run.info.status)" class="text-[11px]">
+                                    {{ run.info.status }}
+                                  </span>
+                                </td>
+                                <td class="px-4 py-3">
+                                  <div class="flex flex-wrap gap-1.5">
+                                    @for (metric of getTopMetrics(run); track metric.key) {
+                                      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white/[0.04] border border-line text-[11px]">
+                                        <span class="text-ink3">{{ metric.key }}</span>
+                                        <span class="mono text-ink font-medium">{{ metric.value.toFixed(4) }}</span>
+                                      </span>
+                                    }
+                                  </div>
+                                </td>
+                                <td class="px-4 py-3 mono text-[12px] text-ink2 text-right">
+                                  {{ getDuration(run) }}
+                                </td>
+                                <td class="px-4 py-3 text-[12px] text-ink3 text-right whitespace-nowrap">
+                                  {{ run.info.start_time | date:'MMM d, HH:mm' }}
+                                </td>
+                                <td class="px-4 py-3" (click)="$event.stopPropagation()">
+                                  <button (click)="promptDeleteExpRun(run.info.run_id, run.info.run_name)"
+                                    class="opacity-0 group-hover/row:opacity-100 text-ink3 hover:text-bad transition-all p-1">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                    </svg>
+                                  </button>
+                                </td>
+                              </tr>
+                            }
+                          </tbody>
+                        </table>
+                      </div>
                     }
-                  </tbody>
-                </table>
+                  </div>
+                }
               </div>
             }
 
@@ -1703,6 +1819,8 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
   runs: MlflowRun[] = [];
   selectedRun: MlflowRun | null = null;
   selectedRunIds = new Set<string>();
+  experimentGroups: ExperimentGroup[] = [];
+  expandedGroups = new Set<string>();
   pipelineRuns: PipelineRun[] = [];
   modelVersions: ModelVersion[] = [];
   modelName = '';
@@ -2046,21 +2164,203 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
     this.experimentService.listRuns(projectId).subscribe({
       next: (res) => {
         this.runs = res.runs;
+        this.buildExperimentGroups();
         this.buildExperimentsChart();
       },
     });
   }
 
+  // ── Experiment grouping & ranking ─────────────────────────────────────────
+  // Metrics we rank models by, best-first. Mirrors championMetric/topRunMetric.
+  private readonly primaryMetricPriority = ['f1_score', 'accuracy', 'roc_auc', 'r2_score'];
+  // Known algorithm names we recognise inside a run name / params.
+  private readonly modelKeywords: { match: RegExp; label: string }[] = [
+    { match: /xgboost|xgb/i, label: 'XGBoost' },
+    { match: /lightgbm|lgbm/i, label: 'LightGBM' },
+    { match: /gradient\s*boost|gradientboosting|gbm|gbc/i, label: 'GradientBoosting' },
+    { match: /random\s*forest|randomforest|rf\b/i, label: 'RandomForest' },
+    { match: /logistic/i, label: 'LogisticRegression' },
+    { match: /decision\s*tree|decisiontree/i, label: 'DecisionTree' },
+    { match: /\bsvm\b|svc|support\s*vector/i, label: 'SVM' },
+    { match: /\bknn\b|kneighbors|k-nearest/i, label: 'KNN' },
+    { match: /ridge/i, label: 'Ridge' },
+    { match: /lasso/i, label: 'Lasso' },
+    { match: /pytorch|torch/i, label: 'PyTorch' },
+    { match: /tensorflow|keras|\btf-/i, label: 'TensorFlow' },
+    { match: /linear\s*regression|linearregression/i, label: 'LinearRegression' },
+  ];
+
+  private isLowerBetter(metricKey: string): boolean {
+    return /loss|error|rmse|mae/i.test(metricKey);
+  }
+
+  // Derive the model family for a run from its name, then its params, then a
+  // sensible fallback (text after the last dash, else the raw name).
+  deriveModelKey(run: MlflowRun): string {
+    const name = run.info.run_name || '';
+    const paramText = (run.data.params || []).map((p) => `${p.key} ${p.value}`).join(' ');
+    const haystack = `${name} ${paramText}`;
+    for (const { match, label } of this.modelKeywords) {
+      if (match.test(haystack)) return label;
+    }
+    if (name.includes('-')) {
+      const tail = name.split('-').pop()!.trim();
+      if (tail) return tail;
+    }
+    return name || 'default';
+  }
+
+  // Pick the headline metric for a run: first present priority metric, else the
+  // first logged metric. Returns null when the run logged nothing.
+  primaryMetric(run: MlflowRun): { key: string; value: number } | null {
+    const metrics = run.data?.metrics || [];
+    if (metrics.length === 0) return null;
+    for (const k of this.primaryMetricPriority) {
+      const m = metrics.find((x) => x.key === k);
+      if (m) return { key: m.key, value: m.value };
+    }
+    const first = metrics[0];
+    return { key: first.key, value: first.value };
+  }
+
+  // Bucket runs by model family, rank runs within each group, then rank the
+  // groups against one another by their best primary-metric value.
+  private buildExperimentGroups(): void {
+    const buckets = new Map<string, MlflowRun[]>();
+    for (const run of this.runs) {
+      const key = this.deriveModelKey(run);
+      (buckets.get(key) ?? buckets.set(key, []).get(key)!).push(run);
+    }
+
+    const groups: ExperimentGroup[] = [];
+    for (const [key, runs] of buckets) {
+      // Decide the ranking metric for this group from its best-logged run.
+      const sampleMetric =
+        runs.map((r) => this.primaryMetric(r)).find((m) => m !== null) ?? null;
+      const primaryKey = sampleMetric?.key ?? '';
+      const lowerIsBetter = primaryKey ? this.isLowerBetter(primaryKey) : false;
+
+      const valueOf = (r: MlflowRun): number | null => {
+        const m = (r.data?.metrics || []).find((x) => x.key === primaryKey);
+        return m ? m.value : null;
+      };
+
+      const sorted = [...runs].sort((a, b) => {
+        // FINISHED runs first, then by primary metric (best-first), then newest.
+        const af = a.info.status === 'FINISHED' ? 0 : 1;
+        const bf = b.info.status === 'FINISHED' ? 0 : 1;
+        if (af !== bf) return af - bf;
+        const av = valueOf(a);
+        const bv = valueOf(b);
+        if (av !== null && bv !== null && av !== bv) {
+          return lowerIsBetter ? av - bv : bv - av;
+        }
+        if (av !== null && bv === null) return -1;
+        if (av === null && bv !== null) return 1;
+        return (b.info.start_time || 0) - (a.info.start_time || 0);
+      });
+
+      const bestRun = sorted[0];
+      const bestVal = valueOf(bestRun);
+      groups.push({
+        key,
+        runs: sorted,
+        bestRun,
+        primaryKey,
+        primaryValue: bestVal ?? 0,
+        lowerIsBetter,
+        rank: 0,
+      });
+    }
+
+    // Rank groups: those with a comparable metric first (best value wins),
+    // groups without any metric fall to the bottom, alphabetically.
+    groups.sort((a, b) => {
+      const aHas = !!a.primaryKey;
+      const bHas = !!b.primaryKey;
+      if (aHas !== bHas) return aHas ? -1 : 1;
+      if (aHas && a.primaryValue !== b.primaryValue) {
+        // Higher is better unless both groups rank a lower-is-better metric.
+        const lower = a.lowerIsBetter && b.lowerIsBetter;
+        return lower ? a.primaryValue - b.primaryValue : b.primaryValue - a.primaryValue;
+      }
+      return a.key.localeCompare(b.key);
+    });
+    groups.forEach((g, i) => (g.rank = i + 1));
+
+    this.experimentGroups = groups;
+    // Expand the leading group by default so the page never looks empty.
+    if (groups.length && this.expandedGroups.size === 0) {
+      this.expandedGroups.add(groups[0].key);
+    }
+  }
+
+  bestGroup(): ExperimentGroup | null {
+    const top = this.experimentGroups[0];
+    return top && top.primaryKey ? top : null;
+  }
+
+  toggleGroup(key: string): void {
+    if (this.expandedGroups.has(key)) this.expandedGroups.delete(key);
+    else this.expandedGroups.add(key);
+  }
+
+  // 1–5 stars from a group's primary value relative to the best group.
+  groupStars(group: ExperimentGroup): number {
+    if (!group.primaryKey) return 0;
+    const best = this.bestGroup();
+    if (!best || best.primaryValue === 0) return group === best ? 5 : 1;
+    const ratio = group.lowerIsBetter
+      ? best.primaryValue / Math.max(group.primaryValue, 1e-9)
+      : group.primaryValue / best.primaryValue;
+    return Math.max(1, Math.min(5, Math.round(ratio * 5)));
+  }
+
+  // Human label for the primary metric key (e.g. f1_score → F1 Score).
+  metricLabel(key: string): string {
+    if (!key) return '—';
+    const map: Record<string, string> = {
+      f1_score: 'F1 Score',
+      accuracy: 'Accuracy',
+      roc_auc: 'ROC-AUC',
+      r2_score: 'R² Score',
+    };
+    return map[key] || key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+
+  rankBadgeClass(rank: number): string {
+    switch (rank) {
+      case 1: return 'bg-amber-400/15 border-amber-400/40 text-amber-300';
+      case 2: return 'bg-slate-300/15 border-slate-300/40 text-slate-200';
+      case 3: return 'bg-orange-500/15 border-orange-500/40 text-orange-300';
+      default: return 'bg-white/[0.04] border-line text-ink3';
+    }
+  }
+
+  // Chart: one bar group per model family showing each model's BEST value for
+  // the present metrics — far fewer bars than per-run, no repeated labels.
   private buildExperimentsChart(): void {
-    const finished = this.runs.filter((r) => r.info.status === 'FINISHED').slice(0, 10).reverse();
-    if (finished.length === 0) {
+    const ranked = this.experimentGroups.filter((g) =>
+      g.runs.some((r) => r.info.status === 'FINISHED')
+    );
+    if (ranked.length === 0) {
       this.experimentsChartData = { labels: [], datasets: [] };
       return;
     }
     const wantedMetrics = ['accuracy', 'f1_score', 'precision', 'recall'];
     const presentMetrics = wantedMetrics.filter((k) =>
-      finished.some((r) => (r.data.metrics || []).some((m) => m.key === k))
+      ranked.some((g) => g.runs.some((r) => (r.data.metrics || []).some((m) => m.key === k)))
     );
+    // Best (max) value of a metric within a model group.
+    const bestOf = (g: ExperimentGroup, key: string): number => {
+      let best = 0;
+      let found = false;
+      for (const r of g.runs) {
+        const m = (r.data.metrics || []).find((x) => x.key === key);
+        if (m) { best = found ? Math.max(best, m.value) : m.value; found = true; }
+      }
+      return found ? best : 0;
+    };
     // cyan → violet → amber → emerald palette aligned to design tokens
     const palette = [
       { bg: 'rgba(66,194,255,0.75)', border: 'rgba(66,194,255,0.9)' },
@@ -2069,13 +2369,10 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
       { bg: 'rgba(52,211,153,0.75)', border: 'rgba(52,211,153,0.9)' },
     ];
     this.experimentsChartData = {
-      labels: finished.map((r) => r.info.run_name || r.info.run_id.substring(0, 8)),
+      labels: ranked.map((g) => g.key),
       datasets: presentMetrics.map((key, idx) => ({
-        label: key,
-        data: finished.map((r) => {
-          const m = (r.data.metrics || []).find((x) => x.key === key);
-          return m ? m.value : 0;
-        }),
+        label: this.metricLabel(key),
+        data: ranked.map((g) => bestOf(g, key)),
         backgroundColor: palette[idx % palette.length].bg,
         borderColor: palette[idx % palette.length].border,
         borderWidth: 1,

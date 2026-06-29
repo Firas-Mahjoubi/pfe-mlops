@@ -375,6 +375,23 @@ interface ExperimentGroup {
                 <p class="text-[12.5px] text-ink3">Upload your training code and trigger a pipeline to see results here.</p>
               </div>
             } @else {
+              <!-- Register toasts -->
+              @if (registerMessage) {
+                <div class="flex items-center gap-2 mb-4 px-4 py-3 bg-good/10 border border-good/30 text-good text-[12.5px] rounded-lg">
+                  <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                  <span class="flex-1">{{ registerMessage }}</span>
+                  <button (click)="activeTab = 'models'" class="underline hover:text-good/80 transition-colors">View in Models</button>
+                  <button (click)="registerMessage = ''" class="text-good/60 hover:text-good transition-colors">✕</button>
+                </div>
+              }
+              @if (registerError) {
+                <div class="flex items-center gap-2 mb-4 px-4 py-3 bg-bad/10 border border-bad/30 text-bad text-[12.5px] rounded-lg">
+                  <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                  <span class="flex-1">{{ registerError }}</span>
+                  <button (click)="registerError = ''" class="text-bad/60 hover:text-bad transition-colors">✕</button>
+                </div>
+              }
+
               <!-- Champion banner: highest-ranked model -->
               @if (bestGroup(); as best) {
                 <div class="relative overflow-hidden rounded-xl border border-cyan3/30 bg-gradient-to-br from-cyan3/[0.07] via-card to-violet/[0.06] p-5 mb-5">
@@ -406,13 +423,24 @@ interface ExperimentGroup {
                         <div class="text-[28px] font-semibold mono text-ink leading-none">{{ best.primaryValue.toFixed(4) }}</div>
                         <div class="text-[11px] text-ink3 mt-1.5">{{ metricLabel(best.primaryKey) }}</div>
                       </div>
-                      <button (click)="selectedRun = best.bestRun"
-                        class="inline-flex items-center gap-1.5 px-3.5 py-2 text-[12.5px] font-medium rounded-lg bg-cyan3/10 border border-cyan3/40 text-cyan3 hover:bg-cyan3/20 transition-colors">
-                        View best run
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                        </svg>
-                      </button>
+                      <div class="flex items-center gap-2">
+                        <button (click)="selectedRun = best.bestRun"
+                          class="inline-flex items-center gap-1.5 px-3.5 py-2 text-[12.5px] font-medium rounded-lg bg-white/[0.04] border border-line text-ink2 hover:text-ink hover:border-white/20 transition-colors">
+                          View best run
+                        </button>
+                        @if (isRegistered(best.bestRun)) {
+                          <span class="inline-flex items-center gap-1.5 px-3.5 py-2 text-[12.5px] font-medium rounded-lg bg-good/10 border border-good/30 text-good">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                            Registered v{{ registeredVersion(best.bestRun) }}
+                          </span>
+                        } @else {
+                          <button (click)="promptRegister(best.bestRun)"
+                            class="inline-flex items-center gap-1.5 px-3.5 py-2 text-[12.5px] font-medium rounded-lg bg-cyan3/10 border border-cyan3/40 text-cyan3 hover:bg-cyan3/20 transition-colors">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v1a2 2 0 01-2 2M5 8v9a2 2 0 002 2h10a2 2 0 002-2V8"/></svg>
+                            Register best run
+                          </button>
+                        }
+                      </div>
                     </div>
                   </div>
                   <div class="relative text-[11.5px] text-ink3 mt-3.5 pt-3.5 border-t border-white/5">
@@ -554,8 +582,16 @@ interface ExperimentGroup {
                                       </svg>
                                     }
                                     <div class="min-w-0">
-                                      <div class="text-[13px] font-medium text-ink leading-tight truncate">
-                                        {{ run.info.run_name || run.info.run_id.substring(0, 8) }}
+                                      <div class="flex items-center gap-1.5">
+                                        <span class="text-[13px] font-medium text-ink leading-tight truncate">
+                                          {{ run.info.run_name || run.info.run_id.substring(0, 8) }}
+                                        </span>
+                                        @if (isRegistered(run)) {
+                                          <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-good/10 border border-good/30 text-good shrink-0">
+                                            <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+                                            v{{ registeredVersion(run) }}
+                                          </span>
+                                        }
                                       </div>
                                       <div class="mono text-[10.5px] text-ink3 mt-0.5">{{ run.info.run_id.substring(0, 12) }}</div>
                                     </div>
@@ -568,9 +604,9 @@ interface ExperimentGroup {
                                 </td>
                                 <td class="px-4 py-3">
                                   <div class="flex flex-wrap gap-1.5">
-                                    @for (metric of getTopMetrics(run); track metric.key) {
+                                    @for (metric of headlineMetrics(run); track metric.label) {
                                       <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white/[0.04] border border-line text-[11px]">
-                                        <span class="text-ink3">{{ metric.key }}</span>
+                                        <span class="text-ink3">{{ metric.label }}</span>
                                         <span class="mono text-ink font-medium">{{ metric.value.toFixed(4) }}</span>
                                       </span>
                                     }
@@ -583,12 +619,21 @@ interface ExperimentGroup {
                                   {{ run.info.start_time | date:'MMM d, HH:mm' }}
                                 </td>
                                 <td class="px-4 py-3" (click)="$event.stopPropagation()">
-                                  <button (click)="promptDeleteExpRun(run.info.run_id, run.info.run_name)"
-                                    class="opacity-0 group-hover/row:opacity-100 text-ink3 hover:text-bad transition-all p-1">
-                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                                    </svg>
-                                  </button>
+                                  <div class="flex items-center justify-end gap-1">
+                                    @if (run.info.status === 'FINISHED' && !isRegistered(run)) {
+                                      <button (click)="promptRegister(run)" title="Register as a model"
+                                        class="opacity-0 group-hover/row:opacity-100 inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] text-cyan3 hover:bg-cyan3/10 transition-all">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v1a2 2 0 01-2 2M5 8v9a2 2 0 002 2h10a2 2 0 002-2V8"/></svg>
+                                        Register
+                                      </button>
+                                    }
+                                    <button (click)="promptDeleteExpRun(run.info.run_id, run.info.run_name)" title="Delete run"
+                                      class="opacity-0 group-hover/row:opacity-100 text-ink3 hover:text-bad transition-all p-1">
+                                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                      </svg>
+                                    </button>
+                                  </div>
                                 </td>
                               </tr>
                             }
@@ -641,18 +686,36 @@ interface ExperimentGroup {
 
                     <!-- Metrics -->
                     <div>
-                      <div class="text-[10.5px] font-semibold tracking-[0.07em] uppercase text-ink3 mb-2.5">Metrics</div>
+                      <div class="text-[10.5px] font-semibold tracking-[0.07em] uppercase text-ink3 mb-2.5">Key Metrics</div>
                       @if (selectedRun.data.metrics.length === 0) {
                         <div class="text-[12.5px] text-ink3 py-3 text-center">No metrics logged</div>
                       } @else {
-                        <div class="bg-card border border-line rounded-lg divide-y divide-line">
-                          @for (metric of selectedRun.data.metrics; track metric.key) {
-                            <div class="flex items-center justify-between px-3.5 py-2.5">
-                              <span class="text-[12.5px] text-ink2">{{ metric.key }}</span>
-                              <span class="mono text-[12.5px] text-ink font-medium">{{ metric.value.toFixed(6) }}</span>
+                        <div class="grid grid-cols-3 gap-2">
+                          @for (metric of headlineMetrics(selectedRun); track metric.label) {
+                            <div class="bg-card border border-line rounded-lg px-3 py-2.5 text-center">
+                              <div class="mono text-[15px] font-semibold text-ink leading-none">{{ metric.value.toFixed(4) }}</div>
+                              <div class="text-[10.5px] text-ink3 mt-1.5">{{ metric.label }}</div>
                             </div>
                           }
                         </div>
+                        <!-- Full raw metric list (autolog included) -->
+                        <button (click)="showAllMetrics = !showAllMetrics" type="button"
+                          class="mt-2.5 flex items-center gap-1.5 text-[11.5px] text-ink3 hover:text-ink2 transition-colors">
+                          <svg class="w-3 h-3 transition-transform" [class.rotate-90]="showAllMetrics" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                          </svg>
+                          All metrics ({{ selectedRun.data.metrics.length }})
+                        </button>
+                        @if (showAllMetrics) {
+                          <div class="mt-2 bg-card border border-line rounded-lg divide-y divide-line">
+                            @for (metric of selectedRun.data.metrics; track metric.key) {
+                              <div class="flex items-center justify-between px-3.5 py-2">
+                                <span class="text-[12px] text-ink2">{{ metric.key }}</span>
+                                <span class="mono text-[12px] text-ink font-medium">{{ metric.value.toFixed(6) }}</span>
+                              </div>
+                            }
+                          </div>
+                        }
                       }
                     </div>
 
@@ -675,6 +738,17 @@ interface ExperimentGroup {
                   </div>
                 </div>
               </div>
+            }
+
+            <!-- Register-as-model confirmation -->
+            @if (registerTarget) {
+              <app-confirm-dialog
+                title="Register as model"
+                [message]="'Register ' + (registerTarget.info.run_name || registerTarget.info.run_id.substring(0,8)) + ' as a new version of ' + projectModelName() + '? You can then promote it to Staging/Production and deploy it.'"
+                [confirmLabel]="registering ? 'Registering…' : 'Register'"
+                (confirmed)="doRegister()"
+                (dismissed)="registerTarget = null"
+              ></app-confirm-dialog>
             }
           </div>
         }
@@ -1821,6 +1895,11 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
   selectedRunIds = new Set<string>();
   experimentGroups: ExperimentGroup[] = [];
   expandedGroups = new Set<string>();
+  showAllMetrics = false;
+  registerTarget: MlflowRun | null = null;
+  registering = false;
+  registerMessage = '';
+  registerError = '';
   pipelineRuns: PipelineRun[] = [];
   modelVersions: ModelVersion[] = [];
   modelName = '';
@@ -2173,6 +2252,41 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
   // ── Experiment grouping & ranking ─────────────────────────────────────────
   // Metrics we rank models by, best-first. Mirrors championMetric/topRunMetric.
   private readonly primaryMetricPriority = ['f1_score', 'accuracy', 'roc_auc', 'r2_score'];
+  // The only metrics surfaced on the Experiments tab. Each spec lists the keys
+  // we accept (eval/test first), so autolog's noisy training_* keys are hidden.
+  private readonly HEADLINE: { label: string; keys: string[] }[] = [
+    { label: 'Accuracy', keys: ['accuracy', 'accuracy_score', 'accuracy_score_X_test', 'test_accuracy', 'val_accuracy'] },
+    { label: 'F1', keys: ['f1_score', 'f1', 'f1_score_X_test', 'test_f1_score', 'val_f1'] },
+    { label: 'ROC-AUC', keys: ['roc_auc', 'roc_auc_score', 'roc_auc_X_test', 'auc'] },
+  ];
+
+  // The curated headline metrics for a run (Accuracy / F1 / ROC-AUC). Falls back
+  // to the run's single top metric so a row is never blank (e.g. regression).
+  headlineMetrics(run: MlflowRun): { label: string; value: number }[] {
+    const metrics = run.data?.metrics || [];
+    if (metrics.length === 0) return [];
+    const out: { label: string; value: number }[] = [];
+    for (const spec of this.HEADLINE) {
+      for (const k of spec.keys) {
+        const m = metrics.find((x) => x.key === k);
+        if (m) { out.push({ label: spec.label, value: m.value }); break; }
+      }
+    }
+    if (out.length > 0) return out;
+    // Fallback: a non-training metric if possible, else the very first.
+    const fallback = metrics.find((m) => !/^train(ing)?_/i.test(m.key)) || metrics[0];
+    return [{ label: fallback.key, value: fallback.value }];
+  }
+
+  // Best value of a headline metric within a run (used by ranking + chart).
+  private headlineValue(run: MlflowRun, spec: { keys: string[] }): number | null {
+    const metrics = run.data?.metrics || [];
+    for (const k of spec.keys) {
+      const m = metrics.find((x) => x.key === k);
+      if (m) return m.value;
+    }
+    return null;
+  }
   // Known algorithm names we recognise inside a run name / params.
   private readonly modelKeywords: { match: RegExp; label: string }[] = [
     { match: /xgboost|xgb/i, label: 'XGBoost' },
@@ -2210,11 +2324,21 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
     return name || 'default';
   }
 
-  // Pick the headline metric for a run: first present priority metric, else the
-  // first logged metric. Returns null when the run logged nothing.
+  // Pick the metric a run is ranked by: first present headline metric (F1 →
+  // Accuracy → ROC-AUC, eval keys preferred), else the first regression-priority
+  // metric, else the first logged metric. Returns null when nothing was logged.
   primaryMetric(run: MlflowRun): { key: string; value: number } | null {
     const metrics = run.data?.metrics || [];
     if (metrics.length === 0) return null;
+    // Headline order for ranking: F1, then Accuracy, then ROC-AUC.
+    const rankOrder = ['F1', 'Accuracy', 'ROC-AUC'];
+    for (const label of rankOrder) {
+      const spec = this.HEADLINE.find((h) => h.label === label)!;
+      const v = this.headlineValue(run, spec);
+      if (v !== null) return { key: label, value: v };
+    }
+    // Regression / fallback: return the RAW metric key so the group's exact-match
+    // valueOf resolves it (headline labels are resolved separately via HEADLINE).
     for (const k of this.primaryMetricPriority) {
       const m = metrics.find((x) => x.key === k);
       if (m) return { key: m.key, value: m.value };
@@ -2240,7 +2364,11 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
       const primaryKey = sampleMetric?.key ?? '';
       const lowerIsBetter = primaryKey ? this.isLowerBetter(primaryKey) : false;
 
+      // primaryKey may be a headline label ("F1") or a raw metric key; resolve
+      // both so every run in the group is scored on the same metric.
+      const headlineSpec = this.HEADLINE.find((h) => h.label === primaryKey);
       const valueOf = (r: MlflowRun): number | null => {
+        if (headlineSpec) return this.headlineValue(r, headlineSpec);
         const m = (r.data?.metrics || []).find((x) => x.key === primaryKey);
         return m ? m.value : null;
       };
@@ -2347,32 +2475,31 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
       this.experimentsChartData = { labels: [], datasets: [] };
       return;
     }
-    const wantedMetrics = ['accuracy', 'f1_score', 'precision', 'recall'];
-    const presentMetrics = wantedMetrics.filter((k) =>
-      ranked.some((g) => g.runs.some((r) => (r.data.metrics || []).some((m) => m.key === k)))
+    // Only the headline metrics that at least one model actually logged.
+    const presentSpecs = this.HEADLINE.filter((spec) =>
+      ranked.some((g) => g.runs.some((r) => this.headlineValue(r, spec) !== null))
     );
-    // Best (max) value of a metric within a model group.
-    const bestOf = (g: ExperimentGroup, key: string): number => {
+    // Best (max) value of a headline metric within a model group.
+    const bestOf = (g: ExperimentGroup, spec: { keys: string[] }): number => {
       let best = 0;
       let found = false;
       for (const r of g.runs) {
-        const m = (r.data.metrics || []).find((x) => x.key === key);
-        if (m) { best = found ? Math.max(best, m.value) : m.value; found = true; }
+        const v = this.headlineValue(r, spec);
+        if (v !== null) { best = found ? Math.max(best, v) : v; found = true; }
       }
       return found ? best : 0;
     };
-    // cyan → violet → amber → emerald palette aligned to design tokens
+    // cyan → violet → amber palette aligned to design tokens
     const palette = [
       { bg: 'rgba(66,194,255,0.75)', border: 'rgba(66,194,255,0.9)' },
       { bg: 'rgba(139,92,246,0.75)', border: 'rgba(139,92,246,0.9)' },
       { bg: 'rgba(245,158,11,0.75)', border: 'rgba(245,158,11,0.9)' },
-      { bg: 'rgba(52,211,153,0.75)', border: 'rgba(52,211,153,0.9)' },
     ];
     this.experimentsChartData = {
       labels: ranked.map((g) => g.key),
-      datasets: presentMetrics.map((key, idx) => ({
-        label: this.metricLabel(key),
-        data: ranked.map((g) => bestOf(g, key)),
+      datasets: presentSpecs.map((spec, idx) => ({
+        label: spec.label,
+        data: ranked.map((g) => bestOf(g, spec)),
         backgroundColor: palette[idx % palette.length].bg,
         borderColor: palette[idx % palette.length].border,
         borderWidth: 1,
@@ -2473,10 +2600,6 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
       case 'FAILED':   return `${base} bg-bad/10 border-bad/30 text-bad`;
       default:         return `${base} bg-white/[0.05] border-line text-ink2`;
     }
-  }
-
-  getTopMetrics(run: MlflowRun): { key: string; value: number }[] {
-    return (run.data?.metrics || []).slice(0, 3);
   }
 
   getDuration(run: MlflowRun): string {
@@ -2912,6 +3035,60 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
     if (this.selectedRunIds.size < 2) return;
     const ids = Array.from(this.selectedRunIds).join(',');
     this.router.navigate(['/runs/compare'], { queryParams: { run_ids: ids } });
+  }
+
+  // ── Register a run as a model ─────────────────────────────────────────────
+  // The single project model these runs register into, e.g. "breast-cancer-model".
+  projectModelName(): string {
+    const base = (this.project?.name || 'project').toLowerCase().replace(/\s+/g, '-');
+    return `${base}-model`;
+  }
+
+  // run_ids that already back a registered model version (for the badge).
+  private registeredRunIds(): Set<string> {
+    return new Set(this.modelVersions.map((v) => v.run_id).filter((id): id is string => !!id));
+  }
+
+  isRegistered(run: MlflowRun): boolean {
+    return this.registeredRunIds().has(run.info.run_id);
+  }
+
+  registeredVersion(run: MlflowRun): string | null {
+    const v = this.modelVersions.find((mv) => mv.run_id === run.info.run_id);
+    return v ? v.version : null;
+  }
+
+  promptRegister(run: MlflowRun): void {
+    this.registerError = '';
+    this.registerMessage = '';
+    this.registerTarget = run;
+  }
+
+  doRegister(): void {
+    if (!this.project || !this.registerTarget) return;
+    const run = this.registerTarget;
+    this.registering = true;
+    this.registerError = '';
+    this.modelService.register(this.project.id, run.info.run_id).subscribe({
+      next: (res) => {
+        this.registering = false;
+        this.registerTarget = null;
+        const label = run.info.run_name || run.info.run_id.substring(0, 8);
+        this.registerMessage = `Registered ${label} as ${res.name} v${res.version}.`;
+        this.loadModels();
+        if (this.project) this.loadRuns(this.project.id);
+        setTimeout(() => (this.registerMessage = ''), 8000);
+      },
+      error: (err) => {
+        this.registering = false;
+        this.registerTarget = null;
+        this.registerError =
+          err.error?.detail ||
+          (err.status === 0
+            ? 'Cannot reach the server. Check your connection and try again.'
+            : 'Could not register this run as a model. Please try again.');
+      },
+    });
   }
 
   // Models

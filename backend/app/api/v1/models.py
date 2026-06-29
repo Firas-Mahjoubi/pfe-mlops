@@ -18,6 +18,71 @@ class PromoteRequest(BaseModel):
     stage: str  # "Staging" | "Production" | "Archived" | "None"
 
 
+class RegisterRequest(BaseModel):
+    project_id: str
+    run_id: str
+    model_name: str | None = None
+
+
+@router.post("/register", status_code=status.HTTP_201_CREATED)
+async def register_run_as_model(
+    payload: RegisterRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Register a run as a new version of the project's model.
+
+    Lets a user turn any experiment run into a deployable model from the UI
+    instead of calling ``mlflow.register_model()`` in their training script.
+    """
+    result = await db.execute(
+        select(Project).where(Project.id == payload.project_id, Project.user_id == current_user.id)
+    )
+    project = result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    model_name = payload.model_name or f"{project.name.lower().replace(' ', '-')}-model"
+
+    try:
+        version = await mlflow_service.register_model_version(payload.run_id, model_name)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to register model: {str(e)}",
+        )
+
+    mv = int(version["version"])
+
+    # Sync into the local registry, skipping if this name+version already exists.
+    existing = await db.execute(
+        select(MLModel).where(
+            MLModel.mlflow_model_name == model_name,
+            MLModel.mlflow_model_version == mv,
+        )
+    )
+    if existing.scalar_one_or_none() is None:
+        db.add(
+            MLModel(
+                project_id=project.id,
+                name=model_name,
+                mlflow_model_name=model_name,
+                mlflow_model_version=mv,
+                stage=ModelStage.NONE,
+                artifact_uri=version.get("source"),
+            )
+        )
+        await db.commit()
+
+    return {
+        "name": model_name,
+        "version": str(version["version"]),
+        "stage": version.get("current_stage", "None"),
+        "run_id": payload.run_id,
+        "source": version.get("source"),
+    }
+
+
 @router.get("/")
 async def list_all_models(
     current_user: User = Depends(get_current_user),

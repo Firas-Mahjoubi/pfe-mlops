@@ -82,6 +82,37 @@ async def get_model_versions_for_runs(run_ids: list[str]) -> list[dict]:
         return resp.json().get("model_versions", [])
 
 
+async def register_model_version(run_id: str, model_name: str) -> dict:
+    """Register a run's logged model as a new version of `model_name`.
+
+    Resolves the conventional model artifact path (``<artifact_uri>/model`` — the
+    same path produced by ``mlflow.sklearn.log_model(model, "model")``) so the
+    created version's ``source`` is a real storage URI that KServe can serve.
+    Creates the registered model first if it does not exist yet.
+    """
+    run = await get_run(run_id)
+    artifact_uri = run["info"].get("artifact_uri")
+    if not artifact_uri:
+        raise ValueError("Run has no artifact_uri; cannot locate a model to register.")
+    source = f"{artifact_uri}/model"
+
+    async with httpx.AsyncClient() as client:
+        # Ensure the registered model exists (idempotent: ignore "already exists").
+        create_resp = await client.post(
+            f"{MLFLOW_URL}/api/2.0/mlflow/registered-models/create",
+            json={"name": model_name},
+        )
+        if create_resp.status_code >= 400 and "RESOURCE_ALREADY_EXISTS" not in create_resp.text:
+            create_resp.raise_for_status()
+
+        resp = await client.post(
+            f"{MLFLOW_URL}/api/2.0/mlflow/model-versions/create",
+            json={"name": model_name, "source": source, "run_id": run_id},
+        )
+        resp.raise_for_status()
+        return resp.json()["model_version"]
+
+
 async def get_model_versions(model_name: str) -> list[dict]:
     async with httpx.AsyncClient() as client:
         resp = await client.get(

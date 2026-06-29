@@ -51,6 +51,19 @@ export class ModelService {
     );
   }
 
+  register(projectId: string, runId: string, modelName?: string): Observable<{
+    name: string;
+    version: string;
+    stage: string;
+    run_id: string;
+    source?: string;
+  }> {
+    return this.http.post<{ name: string; version: string; stage: string; run_id: string; source?: string }>(
+      `${this.apiUrl}/models/register`,
+      { project_id: projectId, run_id: runId, model_name: modelName }
+    );
+  }
+
   promote(modelName: string, version: string, stage: ModelStage): Observable<any> {
     return this.http.post(
       `${this.apiUrl}/models/${encodeURIComponent(modelName)}/versions/${version}/promote`,

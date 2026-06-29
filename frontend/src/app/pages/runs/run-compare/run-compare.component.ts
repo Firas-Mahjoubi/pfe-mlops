@@ -103,11 +103,17 @@ import { ExperimentService, MlflowRun } from '../../../core/services/experiment.
           </div>
         }
 
-        <!-- Metrics table -->
+        <!-- Metrics table (best starred + inline delta from best) -->
         @if (allMetricKeys.length > 0) {
           <div class="bg-card border border-line rounded-xl overflow-hidden mb-4">
-            <div class="px-5 h-10 flex items-center border-b border-line">
+            <div class="px-5 h-10 flex items-center justify-between border-b border-line">
               <div class="text-[11px] font-semibold tracking-[0.08em] uppercase text-ink3">Metrics</div>
+              @if (allMetricKeys.length > headlineMetricKeys().length) {
+                <button (click)="showAllMetrics = !showAllMetrics"
+                  class="text-[11px] text-ink3 hover:text-cyan3 transition-colors inline-flex items-center gap-1">
+                  {{ showAllMetrics ? 'Key metrics only' : 'All metrics (' + allMetricKeys.length + ')' }}
+                </button>
+              }
             </div>
             <table class="w-full">
               <thead>
@@ -121,9 +127,9 @@ import { ExperimentService, MlflowRun } from '../../../core/services/experiment.
                 </tr>
               </thead>
               <tbody>
-                @for (metric of allMetricKeys; track metric) {
+                @for (metric of shownMetricKeys(); track metric) {
                   <tr class="border-b border-line/50 hover:bg-white/[0.015] transition-colors">
-                    <td class="px-5 py-3 text-[12.5px] text-ink2 font-medium">{{ metric }}</td>
+                    <td class="px-5 py-3 text-[12.5px] text-ink2 font-medium">{{ metricRowLabel(metric) }}</td>
                     @for (run of runs; track run.info.run_id) {
                       <td class="px-5 py-3 text-right">
                         @if (getMetricValue(run, metric) !== null) {
@@ -132,6 +138,10 @@ import { ExperimentService, MlflowRun } from '../../../core/services/experiment.
                               <svg class="w-3 h-3 text-good shrink-0" fill="currentColor" viewBox="0 0 20 20">
                                 <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
                               </svg>
+                            } @else if (runs.length >= 2 && formatDelta(metric, getMetricValue(run, metric)) !== '—') {
+                              <span class="mono text-[10.5px] px-1 py-0.5 rounded" [class]="deltaClass(metric, getMetricValue(run, metric))">
+                                {{ formatDelta(metric, getMetricValue(run, metric)) }}
+                              </span>
                             }
                             <span class="mono text-[12.5px] font-medium" [class]="isBest(metric, getMetricValue(run, metric)) ? 'text-good' : 'text-ink'">
                               {{ getMetricValue(run, metric)!.toFixed(4) }}
@@ -149,46 +159,17 @@ import { ExperimentService, MlflowRun } from '../../../core/services/experiment.
           </div>
         }
 
-        <!-- Delta table (best vs others) -->
-        @if (allMetricKeys.length > 0 && runs.length >= 2) {
-          <div class="bg-card border border-line rounded-xl overflow-hidden mb-4">
-            <div class="px-5 h-10 flex items-center border-b border-line">
-              <div class="text-[11px] font-semibold tracking-[0.08em] uppercase text-ink3">Delta from Best</div>
-            </div>
-            <table class="w-full">
-              <thead>
-                <tr class="border-b border-line">
-                  <th class="text-left px-5 py-2.5 text-[10.5px] font-semibold tracking-[0.07em] uppercase text-ink3 w-40">Metric</th>
-                  @for (run of runs; track run.info.run_id; let i = $index) {
-                    <th class="text-right px-5 py-2.5 text-[10.5px] font-semibold tracking-[0.07em] uppercase" [style.color]="runColor(i)">
-                      {{ run.info.run_name || run.info.run_id.substring(0, 8) }}
-                    </th>
-                  }
-                </tr>
-              </thead>
-              <tbody>
-                @for (metric of allMetricKeys; track metric) {
-                  <tr class="border-b border-line/50">
-                    <td class="px-5 py-3 text-[12.5px] text-ink2 font-medium">{{ metric }}</td>
-                    @for (run of runs; track run.info.run_id) {
-                      <td class="px-5 py-3 text-right">
-                        <span class="mono text-[12px]" [class]="deltaClass(metric, getMetricValue(run, metric))">
-                          {{ formatDelta(metric, getMetricValue(run, metric)) }}
-                        </span>
-                      </td>
-                    }
-                  </tr>
-                }
-              </tbody>
-            </table>
-          </div>
-        }
-
-        <!-- Parameters table -->
+        <!-- Parameters table (key hyperparameters by default) -->
         @if (allParamKeys.length > 0) {
           <div class="bg-card border border-line rounded-xl overflow-hidden">
-            <div class="px-5 h-10 flex items-center border-b border-line">
+            <div class="px-5 h-10 flex items-center justify-between border-b border-line">
               <div class="text-[11px] font-semibold tracking-[0.08em] uppercase text-ink3">Parameters</div>
+              @if (allParamKeys.length > keyParamKeys().length) {
+                <button (click)="showAllParams = !showAllParams"
+                  class="text-[11px] text-ink3 hover:text-cyan3 transition-colors inline-flex items-center gap-1">
+                  {{ showAllParams ? 'Key parameters only' : 'All parameters (' + allParamKeys.length + ')' }}
+                </button>
+              }
             </div>
             <table class="w-full">
               <thead>
@@ -202,9 +183,9 @@ import { ExperimentService, MlflowRun } from '../../../core/services/experiment.
                 </tr>
               </thead>
               <tbody>
-                @for (param of allParamKeys; track param) {
+                @for (param of shownParamKeys(); track param) {
                   <tr class="border-b border-line/50 hover:bg-white/[0.015] transition-colors">
-                    <td class="px-5 py-3 text-[12.5px] text-ink2 font-medium">{{ param }}</td>
+                    <td class="px-5 py-3 text-[12.5px] text-ink2 font-medium">{{ paramLabel(param) }}</td>
                     @for (run of runs; track run.info.run_id) {
                       <td class="px-5 py-3 mono text-[12px] text-ink text-right">
                         {{ getParamValue(run, param) || '—' }}
@@ -228,6 +209,8 @@ export class RunCompareComponent implements OnInit {
   loading = true;
   allMetricKeys: string[] = [];
   allParamKeys: string[] = [];
+  showAllMetrics = false;
+  showAllParams = false;
 
   chartType: 'bar' = 'bar';
   metricsChartData: ChartData<'bar'> = { labels: [], datasets: [] };
@@ -269,6 +252,72 @@ export class RunCompareComponent implements OnInit {
     { bg: 'rgba(248,113,113,0.75)', border: 'rgba(248,113,113,1)', solid: '#F87171' },
   ];
 
+  // The only metrics surfaced by default: eval keys preferred, training_* hidden.
+  private readonly HEADLINE: { label: string; keys: string[] }[] = [
+    { label: 'Accuracy', keys: ['accuracy', 'accuracy_score', 'accuracy_score_X_test', 'test_accuracy', 'val_accuracy'] },
+    { label: 'F1', keys: ['f1_score', 'f1', 'f1_score_X_test', 'test_f1_score', 'val_f1'] },
+    { label: 'ROC-AUC', keys: ['roc_auc', 'roc_auc_score', 'roc_auc_X_test', 'auc'] },
+  ];
+
+  // Meaningful sklearn hyperparameters, matched after stripping the estimator
+  // prefix autolog adds (clf__, model__, …). Everything else hides behind a toggle.
+  private readonly KEY_PARAMS = new Set([
+    'n_estimators', 'max_depth', 'learning_rate', 'c', 'kernel', 'gamma',
+    'criterion', 'max_features', 'min_samples_split', 'min_samples_leaf',
+    'penalty', 'solver', 'max_iter', 'n_neighbors', 'subsample', 'num_leaves',
+    'alpha', 'l1_ratio', 'random_state', 'class_weight',
+  ]);
+  private readonly ESTIMATOR_PARAMS = new Set(['clf', 'model', 'estimator', 'classifier', 'regressor']);
+  private readonly PARAM_PREFIXES = ['clf__', 'model__', 'estimator__', 'classifier__', 'regressor__'];
+
+  private stripParamPrefix(key: string): string {
+    for (const p of this.PARAM_PREFIXES) {
+      if (key.startsWith(p)) return key.slice(p.length);
+    }
+    return key;
+  }
+
+  // Display name for a param: drop the estimator prefix autolog adds.
+  paramLabel(key: string): string {
+    return this.stripParamPrefix(key);
+  }
+
+  // The logged metric keys that match a headline metric (preserves raw keys so
+  // isBest/formatDelta keep working). Falls back to all keys if none match.
+  headlineMetricKeys(): string[] {
+    const out: string[] = [];
+    for (const spec of this.HEADLINE) {
+      for (const k of spec.keys) {
+        if (this.allMetricKeys.includes(k)) { out.push(k); break; }
+      }
+    }
+    return out.length > 0 ? out : this.allMetricKeys;
+  }
+
+  // The metric rows shown in the table/chart, honoring the "show all" toggle.
+  shownMetricKeys(): string[] {
+    return this.showAllMetrics ? this.allMetricKeys : this.headlineMetricKeys();
+  }
+
+  metricRowLabel(key: string): string {
+    const spec = this.HEADLINE.find((h) => h.keys.includes(key));
+    return spec ? spec.label : key;
+  }
+
+  // Key hyperparameters: the estimator descriptor + whitelisted params.
+  keyParamKeys(): string[] {
+    return this.allParamKeys.filter((k) => {
+      const bare = this.stripParamPrefix(k).toLowerCase();
+      return this.ESTIMATOR_PARAMS.has(k.toLowerCase()) || this.KEY_PARAMS.has(bare);
+    });
+  }
+
+  shownParamKeys(): string[] {
+    if (this.showAllParams) return this.allParamKeys;
+    const key = this.keyParamKeys();
+    return key.length > 0 ? key : this.allParamKeys;
+  }
+
   ngOnInit(): void {
     const runIdsParam = this.route.snapshot.queryParamMap.get('run_ids');
     if (!runIdsParam) { this.loading = false; return; }
@@ -290,11 +339,15 @@ export class RunCompareComponent implements OnInit {
     return this.palette[idx % this.palette.length].solid;
   }
 
-  // The run that is best on the most metrics (ties don't count for anyone).
+  // The run that is best on the most headline metrics (Accuracy/F1/ROC-AUC).
+  // Scoring on eval metrics — not the inflated training_* ones — keeps this
+  // consistent with the Experiments leaderboard champion. Ties count for no one.
   winner(): { name: string; color: string; wins: number; total: number } | null {
-    if (this.runs.length < 2 || this.allMetricKeys.length === 0) return null;
+    if (this.runs.length < 2) return null;
+    const metrics = this.headlineMetricKeys();
+    if (metrics.length === 0) return null;
     const wins = this.runs.map(() => 0);
-    for (const metric of this.allMetricKeys) {
+    for (const metric of metrics) {
       const values = this.runs.map((r) => this.getMetricValue(r, metric));
       const present = values.filter((v): v is number => v !== null);
       if (present.length < 2) continue;
@@ -314,7 +367,7 @@ export class RunCompareComponent implements OnInit {
       name: run.info.run_name || run.info.run_id.substring(0, 8),
       color: this.runColor(topIdx),
       wins: wins[topIdx],
-      total: this.allMetricKeys.length,
+      total: metrics.length,
     };
   }
 
@@ -330,11 +383,13 @@ export class RunCompareComponent implements OnInit {
   }
 
   private buildChart(): void {
+    // Chart only the headline metrics → a few clean bar groups, not a wall.
+    const keys = this.headlineMetricKeys();
     this.metricsChartData = {
-      labels: this.allMetricKeys,
+      labels: keys.map((k) => this.metricRowLabel(k)),
       datasets: this.runs.map((run, idx) => ({
         label: run.info.run_name || run.info.run_id.substring(0, 8),
-        data: this.allMetricKeys.map((k) => this.getMetricValue(run, k) ?? 0),
+        data: keys.map((k) => this.getMetricValue(run, k) ?? 0),
         backgroundColor: this.palette[idx % this.palette.length].bg,
         borderColor: this.palette[idx % this.palette.length].border,
         borderWidth: 1,

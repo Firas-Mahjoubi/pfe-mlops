@@ -2337,7 +2337,9 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
     { match: /lightgbm|lgbm/i, label: 'LightGBM' },
     { match: /gradient\s*boost|gradientboosting|gbm|gbc/i, label: 'GradientBoosting' },
     { match: /random\s*forest|randomforest|rf\b/i, label: 'RandomForest' },
-    { match: /logistic/i, label: 'LogisticRegression' },
+    // Deliberately strict: XGBoost logs `objective=binary:logistic`, which a
+    // bare /logistic/ would misclassify as LogisticRegression.
+    { match: /logistic\s*_?regression|logisticregression|logreg\b/i, label: 'LogisticRegression' },
     { match: /decision\s*tree|decisiontree/i, label: 'DecisionTree' },
     { match: /\bsvm\b|svc|support\s*vector/i, label: 'SVM' },
     { match: /\bknn\b|kneighbors|k-nearest/i, label: 'KNN' },
@@ -2352,18 +2354,74 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
     return /loss|error|rmse|mae/i.test(metricKey);
   }
 
-  // Derive the model family for a run from its name, then its params, then a
-  // sensible fallback (text after the last dash, else the raw name).
+  private matchModelKeyword(text: string): string | null {
+    if (!text) return null;
+    for (const { match, label } of this.modelKeywords) {
+      if (match.test(text)) return label;
+    }
+    return null;
+  }
+
+  // Derive the model family for a run. Ordered by reliability: MLflow's own
+  // estimator tags, then the run name, then explicit model-descriptor params,
+  // then the logged-model flavor, then (filtered) param text, then name
+  // fallbacks. Auto-named runs (e.g. "nosy-sheep-996") with an XGBoost model
+  // must land in XGBoost — never in LogisticRegression via the
+  // `objective=binary:logistic` param.
   deriveModelKey(run: MlflowRun): string {
     const name = run.info.run_name || '';
-    const paramText = (run.data.params || []).map((p) => `${p.key} ${p.value}`).join(' ');
-    const haystack = `${name} ${paramText}`;
-    for (const { match, label } of this.modelKeywords) {
-      if (match.test(haystack)) return label;
+    const params = run.data.params || [];
+    const tags = run.data.tags || [];
+    const tagValue = (key: string) =>
+      tags.find((t) => t.key === key)?.value ?? '';
+
+    // 1. Autolog's estimator tags name the class directly ("XGBClassifier").
+    const estimator = tagValue('estimator_name') || tagValue('estimator_class');
+    const fromTag = this.matchModelKeyword(estimator);
+    if (fromTag) return fromTag;
+
+    // 2. The run name, when the user named it ("bc-LogisticRegression").
+    const fromName = this.matchModelKeyword(name);
+    if (fromName) return fromName;
+
+    // 3. Params that explicitly describe the model (the built-in pipeline
+    //    logs model_type=RandomForestClassifier; autolog logs clf=...).
+    const DESCRIPTOR_KEYS = new Set([
+      'model_type', 'clf', 'model', 'estimator', 'classifier', 'algorithm',
+    ]);
+    const descriptorText = params
+      .filter((p) => DESCRIPTOR_KEYS.has(p.key.toLowerCase()))
+      .map((p) => p.value)
+      .join(' ');
+    const fromDescriptor = this.matchModelKeyword(descriptorText);
+    if (fromDescriptor) return fromDescriptor;
+
+    // 4. The logged model's flavor ("xgboost", "lightgbm", ...) from the
+    //    log-model history tag. Generic "sklearn" is not decisive — skip it.
+    const history = tagValue('mlflow.log-model.history');
+    const flavorMatch = history.match(/"(xgboost|lightgbm|pytorch|tensorflow|keras)"/i);
+    if (flavorMatch) {
+      const fromFlavor = this.matchModelKeyword(flavorMatch[1]);
+      if (fromFlavor) return fromFlavor;
     }
+
+    // 5. Last resort: all remaining param text, minus keys whose values are
+    //    known to mention other algorithms (objective=binary:logistic, ...).
+    const CONFUSABLE_KEYS = new Set([
+      'objective', 'eval_metric', 'metric', 'loss', 'criterion',
+    ]);
+    const paramText = params
+      .filter((p) => !CONFUSABLE_KEYS.has(p.key.toLowerCase()))
+      .map((p) => `${p.key} ${p.value}`)
+      .join(' ');
+    const fromParams = this.matchModelKeyword(paramText);
+    if (fromParams) return fromParams;
+
+    // 6. Fallbacks: dash-tail of the name unless it's just a number
+    //    ("nosy-sheep-996" must not become a "996" group), else the name.
     if (name.includes('-')) {
       const tail = name.split('-').pop()!.trim();
-      if (tail) return tail;
+      if (tail && !/^\d+$/.test(tail)) return tail;
     }
     return name || 'default';
   }

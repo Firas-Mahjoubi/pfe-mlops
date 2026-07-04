@@ -270,6 +270,11 @@ interface ExperimentGroup {
                 File uploaded successfully!
               </div>
             }
+            @if (uploadError) {
+              <div class="bg-bad/10 border border-bad/40 text-bad px-4 py-3 rounded-lg mb-6 text-sm">
+                {{ uploadError }}
+              </div>
+            }
 
             <!-- Notebook → script auto-conversion result -->
             @if (conversionInfo?.ok) {
@@ -1985,6 +1990,7 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
   uploading = false;
   uploadingFileName = '';
   uploadSuccess = false;
+  uploadError = '';
   pipelineTriggerSuccess = '';
 
   // Notebook → script auto-conversion (result of the last upload)
@@ -2663,6 +2669,7 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
       this.uploading = true;
       this.uploadingFileName = file.name;
       this.uploadSuccess = false;
+      this.uploadError = '';
       this.conversionInfo = null;
       this.zipConversions = [];
 
@@ -2683,8 +2690,12 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
           this.runCodeAnalysis(projectId, res.path, file.name);
           setTimeout(() => (this.uploadSuccess = false), 3000);
         },
-        error: () => {
+        error: (err) => {
           this.uploading = false;
+          this.uploadError =
+            err?.status === 413
+              ? `"${file.name}" is too large for the server's upload limit.`
+              : `Upload of "${file.name}" failed (${err?.status || 'network error'}). ${err?.error?.detail || 'Please retry.'}`;
         },
       });
     }

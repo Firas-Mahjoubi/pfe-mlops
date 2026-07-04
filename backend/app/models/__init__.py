@@ -4,5 +4,9 @@ from app.models.pipeline_run import PipelineRun
 from app.models.ml_model import MLModel
 from app.models.deployment import Deployment
 from app.models.deployment_api_key import DeploymentApiKey
+from app.models.prediction_log import PredictionLog
 
-__all__ = ["User", "Project", "PipelineRun", "MLModel", "Deployment", "DeploymentApiKey"]
+__all__ = [
+    "User", "Project", "PipelineRun", "MLModel", "Deployment",
+    "DeploymentApiKey", "PredictionLog",
+]

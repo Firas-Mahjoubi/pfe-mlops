@@ -3,6 +3,7 @@ import re
 import logging
 import asyncio
 import secrets
+import time
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -17,6 +18,7 @@ from app.database import get_db
 from app.models.deployment import Deployment, DeploymentStatus
 from app.models.deployment_api_key import DeploymentApiKey
 from app.models.ml_model import MLModel
+from app.models.prediction_log import PredictionLog
 from app.models.project import Project
 from app.models.user import User
 from app.schemas.deployment_api_key import (
@@ -442,6 +444,35 @@ async def get_deployment_metrics(
     return metrics
 
 
+async def log_prediction(
+    db: AsyncSession,
+    dep: Deployment,
+    latency_ms: float,
+    status_code: int,
+    n_instances: int,
+    source: str,
+) -> None:
+    """Persist serving telemetry. Best-effort: a logging failure must never
+    fail (or slow) the prediction path, so errors are swallowed after a
+    rollback."""
+    try:
+        db.add(PredictionLog(
+            deployment_id=dep.id,
+            project_id=dep.project_id,
+            latency_ms=round(latency_ms, 2),
+            status_code=status_code,
+            n_instances=n_instances,
+            source=source,
+        ))
+        await db.commit()
+    except Exception:  # noqa: BLE001
+        logger.warning("prediction telemetry write failed", exc_info=True)
+        try:
+            await db.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+
+
 @router.post("/{deployment_id}/predict")
 async def predict(
     deployment_id: str,
@@ -471,16 +502,24 @@ async def predict(
                 detail=f"Deployment is not ready (status={dep.status.value})",
             )
 
+    n_instances = len(payload.instances) if isinstance(payload.instances, list) else 0
+    started = time.perf_counter()
     try:
         result_body = deployment_service.predict(
             dep.inference_service_name, payload.instances
         )
     except Exception as e:  # noqa: BLE001
+        await log_prediction(
+            db, dep, (time.perf_counter() - started) * 1000, 502, n_instances, "app"
+        )
         logger.exception("Prediction failed")
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Prediction failed: {e}",
         )
+    await log_prediction(
+        db, dep, (time.perf_counter() - started) * 1000, 200, n_instances, "app"
+    )
     return result_body
 
 

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import time
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
@@ -108,12 +109,26 @@ async def public_predict(
             detail=f"Deployment is not ready (status={dep.status.value})",
         )
 
-    # 5. Forward to the same predict path the in-UI tester uses.
+    # 5. Forward to the same predict path the in-UI tester uses, recording
+    #    serving telemetry (latency / status) for the Monitoring tab.
+    from app.api.v1.deployments import log_prediction
+
+    n_instances = len(payload.instances) if isinstance(payload.instances, list) else 0
+    started = time.perf_counter()
     try:
-        return deployment_service.predict(dep.inference_service_name, payload.instances)
+        result_body = deployment_service.predict(
+            dep.inference_service_name, payload.instances
+        )
     except Exception as e:  # noqa: BLE001
+        await log_prediction(
+            db, dep, (time.perf_counter() - started) * 1000, 502, n_instances, "public"
+        )
         logger.exception("Public prediction failed")
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Prediction failed: {e}",
         )
+    await log_prediction(
+        db, dep, (time.perf_counter() - started) * 1000, 200, n_instances, "public"
+    )
+    return result_body

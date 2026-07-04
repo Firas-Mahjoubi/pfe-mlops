@@ -15,6 +15,7 @@ import {
   DeploymentStatus,
   ApiKey,
 } from '../../../core/services/deployment.service';
+import { MonitoringService, ServingStats } from '../../../core/services/monitoring.service';
 import { Project } from '../../../core/models/project.model';
 import { IconComponent } from '../../../shared/ui/icon/icon.component';
 import { BtnComponent } from '../../../shared/ui/btn/btn.component';
@@ -96,7 +97,7 @@ interface ExperimentGroup {
       <div class="hairline flex items-center gap-0 -mb-px overflow-x-auto -mx-4 px-4">
         @for (tab of tabs; track tab.id) {
           <button
-            (click)="activeTab = tab.id"
+            (click)="selectTab(tab.id)"
             [class]="'h-10 px-3.5 text-[13px] transition-colors inline-flex items-center gap-2 shrink-0 ' + (activeTab === tab.id ? 'tab-active' : 'text-ink2 hover:text-ink')"
           >
             <span>{{ tab.label }}</span>
@@ -1445,6 +1446,178 @@ interface ExperimentGroup {
           </div>
         }
 
+        @case ('monitoring') {
+          <div class="space-y-5">
+            <!-- A. Health verdict -->
+            @if (modelHealth(); as health) {
+              <div class="rounded-lg border px-5 py-4 flex items-start gap-3"
+                   [class]="health.state === 'improving' ? 'bg-good/5 border-good/30' :
+                            health.state === 'degrading' ? 'bg-bad/5 border-bad/30' :
+                            health.state === 'stable' ? 'bg-cyan3/5 border-cyan3/30' : 'bg-card border-line'">
+                <div class="mt-0.5 shrink-0">
+                  @if (health.state === 'improving') { <span class="text-good text-[18px]">▲</span> }
+                  @else if (health.state === 'degrading') { <span class="text-bad text-[18px]">▼</span> }
+                  @else if (health.state === 'stable') { <span class="text-cyan3 text-[18px]">●</span> }
+                  @else { <app-icon name="activity" className="w-4.5 h-4.5 text-ink3"></app-icon> }
+                </div>
+                <div>
+                  <div class="text-[14px] font-semibold"
+                       [class]="health.state === 'improving' ? 'text-good' : health.state === 'degrading' ? 'text-bad' : health.state === 'stable' ? 'text-cyan3' : 'text-ink2'">
+                    {{ health.title }}
+                  </div>
+                  <div class="text-[12.5px] text-ink2 mt-0.5">{{ health.detail }}</div>
+                </div>
+              </div>
+            }
+
+            <!-- B. KPI tiles -->
+            <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+              @for (kpi of monitoringKpis(); track kpi.label) {
+                <div class="bg-card border border-line rounded-lg p-4">
+                  <div class="text-[10.5px] font-semibold tracking-[0.08em] uppercase text-ink3">{{ kpi.label }}</div>
+                  <div class="mt-1.5 text-[20px] font-semibold tracking-tight leading-none"
+                       [class]="kpi.tone === 'good' ? 'text-good' : kpi.tone === 'bad' ? 'text-bad' : 'text-ink'">
+                    {{ kpi.value }}
+                  </div>
+                  <div class="mt-1.5 text-[11px] text-ink3 truncate">{{ kpi.sub }}</div>
+                </div>
+              }
+            </div>
+
+            <!-- C. Evolution over time -->
+            <div class="bg-card border border-line rounded-lg p-5">
+              <div class="flex items-center justify-between mb-1">
+                <div>
+                  <div class="text-[13px] font-semibold text-ink">Model evolution</div>
+                  <div class="text-[11.5px] text-ink3">Evaluation score of every finished run over time, per model family</div>
+                </div>
+              </div>
+              @if ((evolutionChartData.labels ?? []).length > 0) {
+                <div class="h-64 mt-3">
+                  <canvas baseChart [data]="evolutionChartData" [options]="evolutionChartOptions" [type]="'line'"></canvas>
+                </div>
+              } @else {
+                <div class="text-[12.5px] text-ink3 text-center py-10">No evaluated runs yet — run a training to see the evolution.</div>
+              }
+            </div>
+
+            <!-- D. Version progression -->
+            <div class="bg-card border border-line rounded-lg p-5">
+              <div class="text-[13px] font-semibold text-ink mb-1">Version progression</div>
+              <div class="text-[11.5px] text-ink3 mb-3">Registered model versions in order, with the change vs the previous version</div>
+              @if (versionProgression().length === 0) {
+                <div class="text-[12.5px] text-ink3 text-center py-6">No registered versions yet — register a run from the Experiments tab.</div>
+              } @else {
+                <div class="flex items-stretch gap-2 flex-wrap">
+                  @for (v of versionProgression(); track v.version; let last = $last) {
+                    <div class="rounded-lg border px-4 py-3 min-w-36"
+                         [class]="last ? 'border-cyan3/40 bg-cyan3/5' : 'border-line bg-white/[0.02]'">
+                      <div class="flex items-center gap-2">
+                        <span class="mono text-[12px] font-semibold text-ink">v{{ v.version }}</span>
+                        @if (v.stage !== 'None') {
+                          <span class="text-[9.5px] px-1.5 py-0.5 rounded-full font-medium"
+                                [class]="v.stage === 'Production' ? 'bg-good/15 text-good' : v.stage === 'Staging' ? 'bg-amber-500/15 text-amber-300' : 'bg-white/[0.06] text-ink3'">
+                            {{ v.stage }}
+                          </span>
+                        }
+                      </div>
+                      @if (v.value !== null) {
+                        <div class="mt-1.5 text-[16px] font-semibold text-ink leading-none">{{ v.value.toFixed(4) }}</div>
+                        <div class="mt-1 text-[10.5px] text-ink3">
+                          {{ v.label }}
+                          @if (v.delta !== null) {
+                            <span [class]="v.delta > 0 ? 'text-good' : v.delta < 0 ? 'text-bad' : 'text-ink3'">
+                              · {{ v.delta > 0 ? '▲' : v.delta < 0 ? '▼' : '–' }} {{ (v.delta >= 0 ? '+' : '') + v.delta.toFixed(4) }}
+                            </span>
+                          }
+                        </div>
+                      } @else {
+                        <div class="mt-1.5 text-[12px] text-ink3">no eval metrics</div>
+                      }
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+
+            <!-- E. Serving telemetry -->
+            <div class="bg-card border border-line rounded-lg p-5">
+              <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+                <div>
+                  <div class="text-[13px] font-semibold text-ink">Serving monitoring</div>
+                  <div class="text-[11.5px] text-ink3">Live traffic of this project's prediction endpoints (tester + public API)</div>
+                </div>
+                <div class="flex items-center gap-1.5">
+                  @for (w of [24, 168]; track w) {
+                    <button (click)="loadServing(w)"
+                            class="px-2.5 py-1 rounded text-[11px] font-medium border transition-colors"
+                            [class]="servingWindow === w ? 'border-cyan3/50 text-cyan3 bg-cyan3/10' : 'border-line text-ink3 hover:text-ink2'">
+                      {{ w === 24 ? '24h' : '7d' }}
+                    </button>
+                  }
+                  <button (click)="loadServing()" class="px-2.5 py-1 rounded text-[11px] font-medium border border-line text-ink3 hover:text-ink2">
+                    Refresh
+                  </button>
+                </div>
+              </div>
+
+              @if (servingLoading) {
+                <div class="flex items-center gap-3 py-8 justify-center">
+                  <div class="w-4 h-4 border-2 border-cyan3 border-t-transparent rounded-full animate-spin"></div>
+                  <span class="text-[12.5px] text-ink3">Loading serving telemetry...</span>
+                </div>
+              } @else if (!servingStats || servingStats.total === 0) {
+                <div class="text-[12.5px] text-ink3 text-center py-8">
+                  @if (hasActiveDeployment) {
+                    No predictions in the selected window yet — send a request from the deployment tester (or the public API) and refresh.
+                  } @else {
+                    No deployment yet — deploy a model version, then every prediction call shows up here.
+                  }
+                </div>
+              } @else {
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                  <div class="rounded-lg border border-line bg-white/[0.02] p-3.5">
+                    <div class="text-[10.5px] font-semibold tracking-[0.08em] uppercase text-ink3">Requests</div>
+                    <div class="mt-1 text-[18px] font-semibold text-ink leading-none">{{ servingStats.total }}</div>
+                    <div class="mt-1 text-[10.5px] text-ink3">last {{ servingWindow === 24 ? '24 hours' : '7 days' }}</div>
+                  </div>
+                  <div class="rounded-lg border border-line bg-white/[0.02] p-3.5">
+                    <div class="text-[10.5px] font-semibold tracking-[0.08em] uppercase text-ink3">Error rate</div>
+                    <div class="mt-1 text-[18px] font-semibold leading-none"
+                         [class]="servingStats.error_rate > 0.05 ? 'text-bad' : servingStats.error_rate > 0 ? 'text-amber-300' : 'text-good'">
+                      {{ (servingStats.error_rate * 100).toFixed(1) }}%
+                    </div>
+                    <div class="mt-1 text-[10.5px] text-ink3">{{ servingStats.errors }} failed</div>
+                  </div>
+                  <div class="rounded-lg border border-line bg-white/[0.02] p-3.5">
+                    <div class="text-[10.5px] font-semibold tracking-[0.08em] uppercase text-ink3">Avg latency</div>
+                    <div class="mt-1 text-[18px] font-semibold text-ink leading-none">{{ servingStats.avg_latency_ms ?? '—' }}<span class="text-[11px] text-ink3">ms</span></div>
+                    <div class="mt-1 text-[10.5px] text-ink3">p95: {{ servingStats.p95_latency_ms ?? '—' }} ms</div>
+                  </div>
+                  <div class="rounded-lg border border-line bg-white/[0.02] p-3.5">
+                    <div class="text-[10.5px] font-semibold tracking-[0.08em] uppercase text-ink3">Last prediction</div>
+                    <div class="mt-1 text-[18px] font-semibold text-ink leading-none">{{ servingStats.last_at ? timeAgo(servingStats.last_at) : '—' }}</div>
+                    <div class="mt-1 text-[10.5px] text-ink3">across all deployments</div>
+                  </div>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div>
+                    <div class="text-[11px] font-semibold tracking-[0.08em] uppercase text-ink3 mb-2">Requests per {{ servingStats.bucket_unit }}</div>
+                    <div class="h-44">
+                      <canvas baseChart [data]="servingReqChartData" [options]="servingChartOptions" [type]="'bar'"></canvas>
+                    </div>
+                  </div>
+                  <div>
+                    <div class="text-[11px] font-semibold tracking-[0.08em] uppercase text-ink3 mb-2">Latency per {{ servingStats.bucket_unit }}</div>
+                    <div class="h-44">
+                      <canvas baseChart [data]="servingLatChartData" [options]="servingChartOptions" [type]="'line'"></canvas>
+                    </div>
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+        }
         @case ('deployments') {
           <div>
             <div class="flex justify-between items-center mb-4">
@@ -1922,6 +2095,7 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
   private router = inject(Router);
   private projectService = inject(ProjectService);
   private uploadService = inject(UploadService);
+  private monitoringService = inject(MonitoringService);
   private experimentService = inject(ExperimentService);
   private pipelineService = inject(PipelineService);
   private modelService = inject(ModelService);
@@ -2108,7 +2282,16 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
     { id: 'pipelines', label: 'Pipelines' },
     { id: 'models', label: 'Models' },
     { id: 'deployments', label: 'Deployments' },
+    { id: 'monitoring', label: 'Monitoring' },
   ];
+
+  selectTab(id: string): void {
+    this.activeTab = id;
+    if (id === 'monitoring') {
+      this.buildEvolutionChart();
+      this.loadServing();
+    }
+  }
 
   tabCount(id: string): number | null {
     switch (id) {
@@ -2135,6 +2318,268 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
     if (name.includes('torch') || name.includes('pytorch')) return 'PyTorch';
     if (name.includes('tensorflow') || name.includes('tf-')) return 'TensorFlow';
     return 'sklearn';
+  }
+
+  // ── Monitoring tab ─────────────────────────────────────────────────────────
+  servingStats: ServingStats | null = null;
+  servingLoading = false;
+  servingWindow = 24;
+  evolutionChartData: ChartData<'line'> = { labels: [], datasets: [] };
+  servingReqChartData: ChartData<'bar'> = { labels: [], datasets: [] };
+  servingLatChartData: ChartData<'line'> = { labels: [], datasets: [] };
+
+  readonly evolutionChartOptions: ChartConfiguration<'line'>['options'] = {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'nearest', intersect: false },
+    scales: {
+      x: { ticks: { color: '#7a8a99', font: { size: 10 } }, grid: { color: 'rgba(122,138,153,0.08)' } },
+      y: { ticks: { color: '#7a8a99', font: { size: 10 } }, grid: { color: 'rgba(122,138,153,0.08)' } },
+    },
+    plugins: {
+      legend: { labels: { color: '#c8d8e8', boxWidth: 12, font: { size: 11 } } },
+      tooltip: {
+        backgroundColor: '#0d1420', borderColor: 'rgba(122,138,153,0.25)', borderWidth: 1,
+        titleColor: '#c8d8e8', bodyColor: '#7a8a99', padding: 10,
+      },
+    },
+  };
+  readonly servingChartOptions: ChartConfiguration<'bar' | 'line'>['options'] = {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: { ticks: { color: '#7a8a99', font: { size: 10 } }, grid: { display: false } },
+      y: { beginAtZero: true, ticks: { color: '#7a8a99', font: { size: 10 } }, grid: { color: 'rgba(122,138,153,0.08)' } },
+    },
+    plugins: { legend: { labels: { color: '#c8d8e8', boxWidth: 12, font: { size: 11 } } } },
+  };
+
+  // Primary EVAL metric of a run for trend purposes: F1 → Accuracy → ROC-AUC
+  // (same rank order as the leaderboard; training_* can never match).
+  primaryEvalOf(run: MlflowRun): { label: string; value: number } | null {
+    for (const label of ['F1', 'Accuracy', 'ROC-AUC']) {
+      const spec = this.HEADLINE.find((h) => h.label === label)!;
+      const v = this.headlineValue(run, spec);
+      if (v !== null) return { label, value: v };
+    }
+    return null;
+  }
+
+  private evolutionRuns(): { run: MlflowRun; value: number; label: string }[] {
+    return this.runs
+      .filter((r) => r.info.status === 'FINISHED')
+      .map((run) => ({ run, eval: this.primaryEvalOf(run) }))
+      .filter((x): x is { run: MlflowRun; eval: { label: string; value: number } } => x.eval !== null)
+      .map((x) => ({ run: x.run, value: x.eval.value, label: x.eval.label }))
+      .sort((a, b) => (a.run.info.start_time || 0) - (b.run.info.start_time || 0));
+  }
+
+  buildEvolutionChart(): void {
+    const series = this.evolutionRuns();
+    if (series.length === 0) {
+      this.evolutionChartData = { labels: [], datasets: [] };
+      return;
+    }
+    const labels = series.map((s) =>
+      new Date(s.run.info.start_time).toLocaleDateString(undefined, {
+        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+      })
+    );
+    const families = [...new Set(series.map((s) => this.deriveModelKey(s.run)))];
+    const palette = ['#42C2FF', '#8B5CF6', '#F59E0B', '#34D399', '#F87171', '#E879F9'];
+    this.evolutionChartData = {
+      labels,
+      datasets: families.map((fam, i) => ({
+        label: fam,
+        data: series.map((s) => (this.deriveModelKey(s.run) === fam ? s.value : null)),
+        borderColor: palette[i % palette.length],
+        backgroundColor: palette[i % palette.length] + '33',
+        pointBackgroundColor: palette[i % palette.length],
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        tension: 0.25,
+        spanGaps: true,
+      })),
+    };
+  }
+
+  // Health verdict: latest eval score vs the project's all-time best.
+  modelHealth(): { state: 'improving' | 'stable' | 'degrading' | 'none'; title: string; detail: string } {
+    const series = this.evolutionRuns();
+    if (series.length === 0) {
+      return { state: 'none', title: 'No evaluated runs yet', detail: 'Run a training to start tracking model evolution.' };
+    }
+    const latest = series[series.length - 1];
+    const best = Math.max(...series.map((s) => s.value));
+    if (latest.value >= best - 1e-9) {
+      return {
+        state: 'improving',
+        title: 'Model at its best',
+        detail: `The latest run holds the project's best ${latest.label} (${latest.value.toFixed(4)}).`,
+      };
+    }
+    const dropPct = (best - latest.value) / best;
+    if (dropPct <= 0.02) {
+      return {
+        state: 'stable',
+        title: 'Model stable',
+        detail: `Latest ${latest.label} ${latest.value.toFixed(4)} is within 2% of the best (${best.toFixed(4)}).`,
+      };
+    }
+    return {
+      state: 'degrading',
+      title: 'Model degrading',
+      detail: `Latest ${latest.label} ${latest.value.toFixed(4)} is ${(dropPct * 100).toFixed(1)}% below the best (${best.toFixed(4)}). Consider retraining or reverting to the best version.`,
+    };
+  }
+
+  monitoringKpis(): { label: string; value: string; sub: string; tone: 'good' | 'bad' | 'neutral' }[] {
+    const kpis: { label: string; value: string; sub: string; tone: 'good' | 'bad' | 'neutral' }[] = [];
+    const series = this.evolutionRuns();
+
+    if (series.length > 0) {
+      const best = series.reduce((a, b) => (b.value >= a.value ? b : a));
+      kpis.push({ label: `Best ${best.label}`, value: best.value.toFixed(4), sub: 'all-time best run', tone: 'good' });
+      const latest = series[series.length - 1];
+      if (series.length > 1) {
+        const prev = series[series.length - 2];
+        const d = latest.value - prev.value;
+        kpis.push({
+          label: 'Latest vs previous',
+          value: `${d >= 0 ? '+' : ''}${d.toFixed(4)}`,
+          sub: `${latest.label} across the last two runs`,
+          tone: d > 0 ? 'good' : d < 0 ? 'bad' : 'neutral',
+        });
+      }
+    }
+
+    const finished = this.runs.filter((r) => r.info.status === 'FINISHED').length;
+    const failed = this.runs.filter((r) => r.info.status === 'FAILED').length;
+    const closed = finished + failed;
+    kpis.push({
+      label: 'Runs',
+      value: `${this.runs.length}`,
+      sub: closed ? `${Math.round((finished / closed) * 100)}% success rate` : 'no finished runs yet',
+      tone: 'neutral',
+    });
+
+    const durations = this.runs
+      .filter((r) => r.info.status === 'FINISHED' && r.info.end_time && r.info.start_time)
+      .map((r) => r.info.end_time - r.info.start_time);
+    if (durations.length > 0) {
+      const avg = durations.reduce((a, b) => a + b, 0) / durations.length;
+      kpis.push({ label: 'Avg training time', value: this.fmtDurationMs(avg), sub: `over ${durations.length} finished runs`, tone: 'neutral' });
+    }
+
+    const lastStart = Math.max(0, ...this.runs.map((r) => r.info.start_time || 0));
+    if (lastStart > 0) {
+      const days = Math.floor((Date.now() - lastStart) / 86_400_000);
+      kpis.push({
+        label: 'Last training',
+        value: days === 0 ? 'today' : `${days} day${days === 1 ? '' : 's'} ago`,
+        sub: new Date(lastStart).toLocaleDateString(),
+        tone: days > 30 ? 'bad' : 'neutral',
+      });
+    }
+
+    const ready = this.deployments.find((d) => d.status === 'READY');
+    kpis.push({
+      label: 'Serving',
+      value: ready ? 'LIVE' : 'none',
+      sub: ready ? ready.inference_service_name : 'no active deployment',
+      tone: ready ? 'good' : 'neutral',
+    });
+    return kpis;
+  }
+
+  fmtDurationMs(ms: number): string {
+    if (ms < 1000) return `${Math.round(ms)}ms`;
+    if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+    return `${(ms / 60_000).toFixed(1)}m`;
+  }
+
+  // Registered versions v1→vN with the eval metric and delta vs previous.
+  versionProgression(): { version: string; stage: string; label: string | null; value: number | null; delta: number | null }[] {
+    const sorted = [...this.modelVersions].sort((a, b) => +a.version - +b.version);
+    let prev: number | null = null;
+    return sorted.map((v) => {
+      let value: number | null = null;
+      let label: string | null = null;
+      for (const l of ['F1', 'Accuracy', 'ROC-AUC']) {
+        const spec = this.HEADLINE.find((h) => h.label === l)!;
+        const hit = this.bestHeadlineFromRecord(v.metrics || {}, spec);
+        if (hit) { value = hit.value; label = l; break; }
+      }
+      const delta = value !== null && prev !== null ? value - prev : null;
+      if (value !== null) prev = value;
+      return { version: v.version, stage: v.stage, label, value, delta };
+    });
+  }
+
+  get hasActiveDeployment(): boolean {
+    return this.deployments.some((d) => d.status !== 'DELETED');
+  }
+
+  loadServing(hours: number = this.servingWindow): void {
+    if (!this.project) return;
+    this.servingWindow = hours;
+    this.servingLoading = true;
+    this.monitoringService.getServing(this.project.id, hours).subscribe({
+      next: (s) => {
+        this.servingLoading = false;
+        this.servingStats = s;
+        this.buildServingCharts(s);
+      },
+      error: () => {
+        this.servingLoading = false;
+        this.servingStats = null;
+      },
+    });
+  }
+
+  private buildServingCharts(s: ServingStats): void {
+    const labels = s.buckets.map((b) =>
+      s.bucket_unit === 'hour'
+        ? new Date(b.t).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+        : new Date(b.t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    );
+    this.servingReqChartData = {
+      labels,
+      datasets: [
+        {
+          label: 'Requests',
+          data: s.buckets.map((b) => b.count - b.errors),
+          backgroundColor: 'rgba(66,194,255,0.75)',
+          borderColor: 'rgba(66,194,255,0.9)',
+          borderWidth: 1,
+          borderRadius: 3,
+        },
+        {
+          label: 'Errors',
+          data: s.buckets.map((b) => b.errors),
+          backgroundColor: 'rgba(248,113,113,0.75)',
+          borderColor: 'rgba(248,113,113,1)',
+          borderWidth: 1,
+          borderRadius: 3,
+        },
+      ],
+    };
+    this.servingLatChartData = {
+      labels,
+      datasets: [
+        {
+          label: 'Avg latency (ms)',
+          data: s.buckets.map((b) => b.avg_latency_ms),
+          borderColor: '#34D399',
+          backgroundColor: 'rgba(52,211,153,0.2)',
+          pointBackgroundColor: '#34D399',
+          pointRadius: 3,
+          tension: 0.3,
+          spanGaps: true,
+          fill: true,
+        },
+      ],
+    };
   }
 
   championRun(): MlflowRun | null {

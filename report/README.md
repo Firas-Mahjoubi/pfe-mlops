@@ -41,11 +41,24 @@ locally. One-time setup:
 
 ## Compile locally — command line
 
+**Use the build script (recommended on Windows / MiKTeX):**
 ```powershell
 cd report
-latexmk -pdf -outdir=build main.tex   # pdflatex + biber, reruns as needed
+./build.ps1
 ```
-Output: `build/main.pdf`. Clean aux files with `latexmk -c`.
+Output: `build/main.pdf`. The script chains `pdflatex → biber → pdflatex → pdflatex`
+using MiKTeX's native executables.
+
+> **Why not `latexmk`?** MiKTeX's `latexmk` is a *Perl* script and MiKTeX does not
+> bundle Perl, so `latexmk` fails with *"could not find the script engine 'perl'"*.
+> `build.ps1` (and the VS Code recipe below) avoid latexmk entirely. If you prefer
+> the `latexmk` workflow, install Perl once — `winget install --id
+> StrawberryPerl.StrawberryPerl -e` — then `latexmk -pdf -outdir=build main.tex`
+> works.
+
+> **VS Code build-on-save:** open the **`report/` folder itself** in VS Code (not
+> the repository root) so the committed `report/.vscode/settings.json` — which
+> already uses the Perl-free `pdflatex + biber` recipe — is applied.
 
 ## Compile with Docker (zero install)
 
@@ -69,7 +82,7 @@ preferred.)
 main.tex                 preamble + document assembly (swap class here for school template)
 references.bib           bibliography (add entries, cite with \cite{key})
 glossary.tex             acronyms (use \gls{key} in text)
-frontmatter/             cover, dedication, acknowledgments
+frontmatter/             cover, dedication, acknowledgments (+ optional cover_official.pdf / validation_form.pdf)
 chapters/                00 intro · 01–07 body · 08 conclusion
 diagrams/                PlantUML sources (.puml) — render to PDF into images/
 images/                  all figures (PDF for diagrams, PNG for screenshots)
@@ -92,16 +105,31 @@ The chapters currently show **framed placeholders** where figures go; they
 compile fine without the images. Replace each placeholder with the
 `\includegraphics` line already commented just above it.
 
-## What still needs YOUR input (search the `.tex` files for `>>> USER` and `<<...>>`)
+## Official ESPRIT cover page + validation form
 
-- **INSOMEA** real presentation text + org chart (Chapter 1).
-- **Sprint dates** on the Gantt chart (Chapter 3) and **story points** in the
-  backlog tables if they differ from the estimates.
-- **Burndown** y-values per sprint (Chapters 4–7) — replace with your real data.
-- **Screenshots** of the UI for each sprint's "User Interface" section.
-- **Cover page** details (school name, diploma, supervisors, jury, year).
-- Decide whether an **English abstract + French résumé** are required and whether
-  **appendices** are wanted (both easy to add).
+The report uses the school's official **page de garde** when you provide it, and
+falls back to the hand-built LaTeX cover (`frontmatter/coverpage.tex`) otherwise —
+so the build never breaks. To use the official cover:
+
+1. Fill the ESPRIT cover template with these values (kept consistent with the report
+   body): **Year** 2025–2026 · **Specialty** Software Engineering · **Title**
+   "Design and Implementation of an End-to-End MLOps Platform…" · **By** Firas
+   Mahjoubi · **Academic supervisor** Mr. Ben Mardes Achref · **Corporate
+   Internship Supervisor** Mr. Amine Gonji · **Company logo** INSOMEA
+   (`logo/insomea.png`).
+2. Export it and drop it in as **`frontmatter/cover_official.pdf`**.
+3. Fill/sign/scan the supervisor validation form and drop it in as
+   **`frontmatter/validation_form.pdf`** — `main.tex` inserts it right after the
+   cover, as the faculty requires.
+
+`main.tex` includes both automatically via `\includepdf` (guarded by
+`\IfFileExists`, so missing files just fall back). No `.tex` edits needed.
+
+## What still needs YOUR input
+
+- **Official cover + validation form** PDFs (see the section above).
+- **Jury names** on the LaTeX fallback cover — `frontmatter/coverpage.tex`,
+  President and Reviewer lines (only relevant if the official cover isn't used).
 
 ## Notes
 

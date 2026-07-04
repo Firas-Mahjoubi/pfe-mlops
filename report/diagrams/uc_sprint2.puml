@@ -18,6 +18,14 @@ User --> UC2
 User --> UC3
 User --> UC4
 
+' Order the workflow chain left-to-right: Upload -> Trigger -> Watch live logs.
+' Browse experiments is an independent capability (no include/extend), so it is
+' left unpinned: smetana then groups it with the actor on the left instead of
+' stranding it at the far right, and the more compact shape renders larger.
+' (Undirected hidden edges: directed ones make smetana clip the frame title.)
+UC1 -[hidden]- UC2
+UC2 -[hidden]- UC3
+
 UC2 ..> UC1 : <<include>>
 UC3 ..> UC2 : <<extend>>
 @enduml

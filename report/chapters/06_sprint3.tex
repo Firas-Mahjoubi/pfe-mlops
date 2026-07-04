@@ -126,7 +126,27 @@ registry; the platform mirrors and controls it through its own \gls{ui}.
 Deploying a model reduces to creating a single declarative resource on the cluster.
 The serving operator reconciles this resource into a running deployment, a service,
 and an ingress, backed by a framework-specific model server that loads the model
-artifact directly from the object store.
+artifact directly from the object store. Figure~\ref{fig:deploy-flow} traces this
+flow, from a registered model to a live prediction service.
+
+\begin{figure}[H]\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}
+  \node[stagenode,fill=diagblue!12] (reg) {Register\\model version};
+  \node[stepnode,right=0.7cm of reg] (isvc) {Backend creates\\InferenceService};
+  \node[stepnode,right=0.7cm of isvc] (op) {\includegraphics[height=0.45cm]{kserve}\\KServe operator\\reconciles};
+  \node[stepnode,right=0.7cm of op,minimum height=2.4cm] (res) {Deployment\\Service\\Ingress};
+  \node[storenode,right=0.7cm of res] (srv) {Model server\\loads artifact\\\includegraphics[height=0.4cm]{minio}};
+  \node[stagenode,right=0.7cm of srv,fill=diaggreen!12,draw=diaggreen!60] (ready) {READY\\$\rightarrow$ Predict};
+  \draw[flowarrow] (reg) -- (isvc);
+  \draw[flowarrow] (isvc) -- (op);
+  \draw[flowarrow] (op) -- (res);
+  \draw[flowarrow] (res) -- (srv);
+  \draw[flowarrow] (srv) -- (ready);
+\end{tikzpicture}}
+\caption{Deployment flow: from a registered model to a live prediction service}
+\label{fig:deploy-flow}
+\end{figure}
 
 \begin{lstlisting}[language=Python,caption={Deployment is expressed declaratively; the operator does the rest.},label={lst:isvc}]
 inference_service = {
@@ -188,35 +208,6 @@ Delete a deployment & Cluster resources removed; record cleaned up & OK\\ \hline
 \end{table}
 
 % ---------------------------------------------------------------------------
-\section{Sprint Review}
-At the end of Sprint~3 a user can take a tracked run all the way to a live,
-queryable model, the platform now \emph{registers, deploys, and serves}.
-\begin{figure}[H]\centering
-\begin{tikzpicture}
-\begin{axis}[
-    width=0.8\textwidth, height=6cm,
-    xlabel={Day}, ylabel={Remaining points},
-    xmin=0, xmax=11, ymin=0, ymax=22,
-    legend pos=north east, grid=both,
-]
-\addplot[dashed,gray] coordinates {(0,21)(10,0)};
-\addplot[thick,primary,mark=*] coordinates {
-  (0,21)(1,21)(2,19)(3,17)(4,14)(5,12)(6,9)(7,7)(8,4)(9,2)(10,0)};
-\legend{Ideal, Actual}
-\end{axis}
-\end{tikzpicture}
-\caption{Sprint~3 burndown chart}\label{fig:burndown-s3}
-\end{figure}
-
-\noindent\textbf{Retrospective.}
-What went well: expressing deployment as a single declarative resource paid off,
-once the operator was configured, deploying any model became trivial and uniform.
-To improve: configuring the serving operator to match the cluster's ingress setup
-(RawDeployment mode instead of the default serverless mode) required careful
-investigation and took several days of the sprint; reading the operator's
-documentation end-to-end before starting would have surfaced the constraint
-earlier.
-
 \section*{Conclusion}
 Sprint~3 closed the loop from a tracked run to a live, queryable model. The final
 sprint makes the platform observable, opens it to external clients, and adds

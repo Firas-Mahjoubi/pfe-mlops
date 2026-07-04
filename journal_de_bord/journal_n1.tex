@@ -1,0 +1,263 @@
+%==============================================================================
+%  INTERNSHIP LOGBOOK — N°1
+%  Firas Mahjoubi — End-to-End MLOps Platform — INSOMEA
+%  Standalone deliverable. Does NOT touch the report/ project.
+%==============================================================================
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{lmodern}
+\usepackage[a4paper,top=2cm,bottom=2cm,left=2.2cm,right=2.2cm,headheight=28pt]{geometry}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{tikz}
+\usepackage{fancyhdr}
+\usepackage{lastpage}
+\usepackage{microtype}
+\usetikzlibrary{shapes.geometric,arrows.meta,positioning,fit,backgrounds}
+
+% logos are reused from the report without copying them
+\graphicspath{{./}{../report/logo/}}
+
+% --- palette -----------------------------------------------------------------
+\definecolor{espritred}{RGB}{198,12,48}
+\definecolor{ink}{RGB}{33,37,41}
+\definecolor{steel}{RGB}{47,101,151}
+\definecolor{steellight}{RGB}{223,233,243}
+\definecolor{rule}{RGB}{210,214,218}
+
+\color{ink}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5pt}
+\renewcommand{\arraystretch}{1.35}
+
+% --- header / footer ---------------------------------------------------------
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\footnotesize\textbf{Logbook N°1}}
+\fancyhead[R]{\footnotesize Firas Mahjoubi — MLOps Platform}
+\fancyfoot[L]{\footnotesize 2025/2026}
+\fancyfoot[C]{\footnotesize\thepage}
+\fancyfoot[R]{\footnotesize INSOMEA}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0.4pt}
+\renewcommand{\headrule}{\hbox to\headwidth{\color{rule}\leaders\hrule height \headrulewidth\hfill}}
+\renewcommand{\footrule}{\hbox to\headwidth{\color{rule}\leaders\hrule height \footrulewidth\hfill}}
+
+% --- section styling ---------------------------------------------------------
+\usepackage{titlesec}
+\titleformat{\section}{\large\bfseries\color{steel}}{\thesection.}{0.5em}{}
+\titlespacing{\section}{0pt}{12pt}{4pt}
+\titleformat{\subsection}[runin]{\bfseries\color{ink}}{}{0pt}{}[ ---]
+\titlespacing{\subsection}{0pt}{6pt}{0.6em}
+
+% framed logbook-title box
+\newcommand{\journalbox}[2]{%
+  \begin{center}
+  \setlength{\fboxsep}{10pt}%
+  \fcolorbox{steel}{white}{%
+    \begin{minipage}{0.92\textwidth}\centering
+      {\large\bfseries #1}\\[3pt]{\normalsize\bfseries\color{steel} #2}
+    \end{minipage}}
+  \end{center}}
+
+% architecture node
+\tikzset{
+  techbox/.style={draw=steel,fill=steellight,rounded corners=3pt,
+                  minimum height=1.55cm,minimum width=2.6cm,align=center,
+                  font=\scriptsize\bfseries,inner sep=3pt},
+  store/.style={draw=steel!70,fill=white,rounded corners=3pt,
+                minimum height=1.4cm,minimum width=2.4cm,align=center,
+                font=\scriptsize\bfseries,inner sep=3pt},
+  flow/.style={-{Latex[length=2.5mm]},steel,thick},
+}
+
+%==============================================================================
+\begin{document}
+\thispagestyle{fancy}
+
+% --- letterhead --------------------------------------------------------------
+\begin{minipage}[c]{0.5\textwidth}
+  \raggedright\includegraphics[height=1.7cm,keepaspectratio]{Esprit}
+\end{minipage}\hfill
+\begin{minipage}[c]{0.45\textwidth}
+  \raggedleft\includegraphics[height=1.5cm,keepaspectratio]{insomea}
+\end{minipage}
+
+\vspace{0.3cm}
+{\color{rule}\hrule height 1pt}
+\vspace{0.5cm}
+
+\begin{center}
+  {\Huge\bfseries INTERNSHIP LOGBOOK}
+\end{center}
+\vspace{0.4cm}
+
+% --- header info table -------------------------------------------------------
+\begin{center}
+\begin{tabularx}{\textwidth}{|>{\bfseries\color{ink}}p{3.6cm}|X|}
+\hline
+Intern           & Firas Mahjoubi \\ \hline
+Company          & INSOMEA \\ \hline
+Address          & Immeuble Lac d'Or ``Business Center'', Bloc B, 3\textsuperscript{rd} floor, Les Berges du Lac 2, Tunis 1053 \\ \hline
+Client / Project & End-to-End MLOps Platform (Training, Experiment Tracking \& Model Deployment on Kubernetes) \\ \hline
+Module           & Platform foundations \& development-environment setup \\ \hline
+Period           & 12 January 2026 — 11 July 2026 \\ \hline
+Supervisors      & Mr. Amine Gonji (company), Mr. Ben Mardes Achref (academic), Mr. Benarous Abderrahmen (technical) \\ \hline
+School           & Private Higher School of Engineering and Technology — ESPRIT \\ \hline
+Programme        & Software Engineering (Engineering Degree) \\ \hline
+\end{tabularx}
+\end{center}
+
+\vspace{0.3cm}
+
+% --- context -----------------------------------------------------------------
+\section*{Project Context}
+\addcontentsline{toc}{section}{Project Context}
+The project consists of designing and implementing, within \textbf{INSOMEA}, an
+\textbf{end-to-end MLOps platform} that industrializes the life cycle of
+\emph{Machine Learning} models. Today, model training, experiment tracking and
+deployment rely on manual, poorly reproducible practices: scripts run locally,
+results scattered across machines, and hand-crafted production rollouts.
+
+The platform aims to unify this cycle: a user (\emph{data scientist}) uploads their
+code and data, triggers an isolated training job on a \textbf{Kubernetes cluster},
+and sees its metrics, parameters and artifacts captured automatically in a tracking
+server (\textbf{MLflow}). The resulting models can then be registered, versioned,
+deployed as inference services and queried, all from a single web interface.
+
+My contribution during this first fortnight covers the \textbf{framing} of the
+project, the \textbf{state of the art} of MLOps tooling, and the \textbf{setup of
+the technical environment} that underpins all the sprints to come.
+
+% --- logbook title box -------------------------------------------------------
+\journalbox{INTERNSHIP LOGBOOK N°1 \quad(12/01/2026 — 23/01/2026)}%
+{Framing, MLOps state of the art, and environment setup}
+
+% --- 1. missions -------------------------------------------------------------
+\section{Tasks Accomplished}
+During this first fortnight, I laid the foundations of the project: framing the
+requirements, benchmarking the MLOps building blocks, and deploying a complete
+development environment that mirrors the target architecture.
+
+\subsection{Framing and scope}
+I defined the functional scope of the platform (code upload, cluster-based
+training, automatic experiment tracking, model registry, deployment and
+prediction) and organized the work into four sprints following the \textbf{Scrum}
+methodology. The first sprint, \emph{Foundation}, covers authentication and project
+management.
+
+\subsection{MLOps state of the art}
+I carried out a comparative study of the \emph{cloud-native} ecosystem components
+in order to settle on a coherent, open-source stack: \textbf{MLflow} for experiment
+tracking and the model registry, \textbf{KServe} for inference serving on
+Kubernetes, \textbf{Kubeflow Pipelines / Argo} for training orchestration,
+\textbf{MinIO} as S3-compatible object storage, and \textbf{FastAPI}~/~\textbf{Angular}
+for the application.
+
+\subsection{Environment setup}
+I provisioned a \textbf{Kubernetes cluster} and deployed the \textbf{MLflow}
+tracking server on it (backed by a \textbf{PostgreSQL} database for metadata and by
+\textbf{MinIO} for artifacts). I initialized the \textbf{FastAPI} backend skeleton
+(asynchronous, SQLAlchemy) and the \textbf{Angular 19} frontend scaffold.
+
+\subsection{Initial design and start of Sprint 1}
+I modelled the two founding entities (\texttt{User}, \texttt{Project}), settled on a
+microservices architecture, and chose \textbf{stateless JWT} authentication. I
+started implementing authentication (sign-up, sign-in, session refresh) with
+\texttt{bcrypt} password hashing.
+
+% --- architecture figure -----------------------------------------------------
+\vspace{2pt}
+\textbf{Technical environment set up:}
+\vspace{0.2cm}
+
+\begin{center}
+\begin{tikzpicture}[node distance=1.1cm and 1.6cm]
+  \node[techbox] (front) {\includegraphics[height=0.7cm]{angular}\\[2pt]Frontend\\Angular 19};
+  \node[techbox, right=of front] (back) {\includegraphics[height=0.7cm]{fastapi}\\[2pt]Backend\\FastAPI};
+  \node[store, above right=0.5cm and 1.7cm of back] (mlflow) {\includegraphics[height=0.6cm]{mlflow}\\[2pt]MLflow\\Tracking};
+  \node[store, right=1.7cm of back] (minio) {\includegraphics[height=0.6cm]{minio}\\[2pt]MinIO\\(S3 storage)};
+  \node[store, below right=0.5cm and 1.7cm of back] (pg) {\includegraphics[height=0.55cm]{postgresql}\\[2pt]PostgreSQL};
+
+  \draw[flow] (front) -- node[above,font=\tiny,black]{REST/JWT} (back);
+  \draw[flow] (back) -- (mlflow);
+  \draw[flow] (back) -- (minio);
+  \draw[flow] (back) -- (pg);
+  \draw[flow,dashed] (mlflow) -- (minio);
+
+  \begin{scope}[on background layer]
+    \node[draw=espritred!60,dashed,rounded corners=6pt,fill=espritred!4,
+          fit=(mlflow)(minio)(pg),inner sep=8pt,
+          label={[font=\scriptsize\bfseries,espritred]above:{Kubernetes cluster}}] {};
+  \end{scope}
+\end{tikzpicture}
+\end{center}
+
+\vspace{2pt}
+\textbf{Components set up:}
+\begin{itemize}[leftmargin=1.4em,itemsep=2pt]
+  \item \textbf{Kubernetes cluster}: namespaces, \texttt{kubectl} access, basic ingress.
+  \item \textbf{MLflow}: tracking server with a PostgreSQL backend and a MinIO \emph{artifact store}.
+  \item \textbf{FastAPI backend}: project structure, configuration, asynchronous database connection, authentication endpoints (JWT).
+  \item \textbf{Angular 19 frontend}: \emph{scaffolding}, routing, sign-in/sign-up screens, \texttt{AuthService} and a \emph{route guard}.
+  \item \textbf{Git repository} and a basic continuous-integration pipeline (GitHub Actions).
+\end{itemize}
+
+% --- 2. deliverables ---------------------------------------------------------
+\section{Deliverables Produced}
+\begin{itemize}[leftmargin=1.4em,itemsep=2pt]
+  \item \textbf{Framing document} and \textbf{MLOps state-of-the-art study} (technical-stack decision).
+  \item \textbf{Working development environment}: Kubernetes cluster + MLflow + MinIO + PostgreSQL.
+  \item \textbf{FastAPI backend skeleton} with JWT authentication (sign-up, sign-in, refresh).
+  \item \textbf{Angular frontend skeleton} with the authentication screens.
+  \item \textbf{Initial data model} (\texttt{User}, \texttt{Project}) and architecture diagram.
+\end{itemize}
+
+% --- 3. skills ---------------------------------------------------------------
+\section{Skills Applied and Lessons Learned}
+This phase allowed me to consolidate an overall vision of \textbf{MLOps
+engineering} and of setting up a \emph{cloud-native} environment.
+\begin{itemize}[leftmargin=1.4em,itemsep=2pt]
+  \item \textbf{Containerization \& orchestration}: Docker, Kubernetes (deployments, services, namespaces).
+  \item \textbf{MLOps ecosystem}: MLflow (tracking \& registry), MinIO (S3 object storage), PostgreSQL.
+  \item \textbf{Backend}: asynchronous FastAPI, SQLAlchemy, OAuth2/JWT security, bcrypt hashing.
+  \item \textbf{Frontend}: Angular 19 (\emph{standalone} components), Tailwind CSS, session management.
+  \item \textbf{Methodology}: Scrum organization, breakdown into sprints and backlog.
+\end{itemize}
+
+% --- 4. difficulties ---------------------------------------------------------
+\section{Difficulties and Solutions}
+\begin{itemize}[leftmargin=1.4em,itemsep=3pt]
+  \item \textbf{Access to the cluster's internal services} (MLflow, MinIO) from
+        outside: solved by setting up \emph{ingress} and \texttt{port-forward},
+        together with dedicated environment variables.
+  \item \textbf{MLflow~$\leftrightarrow$~MinIO integration} (artifacts on S3
+        storage): solved by configuring the S3 \emph{credentials} and the MinIO
+        \emph{endpoint} on the tracking server side.
+  \item \textbf{Stateless authentication}: chose an \emph{access}/\emph{refresh}
+        token pair and set up an Angular interceptor for transparent session
+        refresh.
+  \item \textbf{Environment reproducibility}: versioned Kubernetes manifests and a
+        \texttt{docker-compose} setup for local execution.
+\end{itemize}
+
+% --- 5. feelings -------------------------------------------------------------
+\section{Reflection and Alignment with My Expectations}
+This first fortnight, largely dedicated to framing and environment setup, was
+particularly instructive: it forced me to take a step back over the whole MLOps
+chain before writing a single line of business code. Having a solid, reproducible
+environment from the outset is, I believe, the condition for the success of the
+following sprints.
+
+The work carried out is fully aligned with my expectations: it let me build up
+skills in the \emph{cloud-native} ecosystem and validate the architectural choices
+with my supervisors. I therefore approach the first functional sprint
+(authentication and project management) on clear, well-mastered foundations.
+
+\end{document}

@@ -10,11 +10,31 @@ export interface UploadedFile {
   last_modified: string | null;
 }
 
+export interface NotebookConversion {
+  ok: boolean;
+  script_filename?: string;
+  script_path?: string;
+  warnings: CodeWarning[];
+  pip_packages: string[];
+}
+
+export interface ZipNotebookConversion {
+  original: string;
+  script: string | null;
+  ok: boolean;
+  warnings: CodeWarning[];
+  pip_packages: string[];
+}
+
 export interface UploadResponse {
   filename: string;
   path: string;
   s3_uri: string;
   size: number;
+  /** Set when a .ipynb was uploaded: the auto-converted runnable script. */
+  conversion?: NotebookConversion | null;
+  /** Set when a .zip contained notebooks: one entry per converted notebook. */
+  notebook_conversions?: ZipNotebookConversion[];
 }
 
 export interface CodeWarning {

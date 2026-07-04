@@ -12,7 +12,7 @@ from app.api.deps import get_current_user
 from app.database import get_db
 from app.models.project import Project
 from app.models.user import User
-from app.services import code_analyzer
+from app.services import code_analyzer, notebook_converter
 from app.utils.minio_client import BUCKET_USER_CODE, get_file, upload_file, list_objects
 
 router = APIRouter(prefix="/projects/{project_id}", tags=["uploads"])
@@ -43,8 +43,35 @@ async def upload_code(
 
     data = await file.read()
     upload_id = str(uuid.uuid4())[:8]
-    object_name = f"{project_id}/{upload_id}/{file.filename}"
 
+    # Notebooks are converted to a runnable script at upload time, so failures
+    # surface here (with warnings the UI can show) instead of minutes later in
+    # the training pod. Both the original and the script are stored.
+    conversion: dict | None = None
+    notebook_conversions: list[dict] = []
+
+    if ext == ".ipynb":
+        result = notebook_converter.convert_notebook_bytes(data, file.filename)
+        conversion = {
+            "ok": result.ok,
+            "warnings": [w.to_dict() for w in result.warnings],
+            "pip_packages": result.pip_packages,
+        }
+        if result.ok:
+            script_filename = file.filename.rsplit(".", 1)[0] + ".py"
+            script_object = f"{project_id}/{upload_id}/{script_filename}"
+            upload_file(
+                BUCKET_USER_CODE,
+                script_object,
+                result.script.encode("utf-8"),
+                "text/x-python",
+            )
+            conversion["script_filename"] = script_filename
+            conversion["script_path"] = script_object
+    elif ext == ".zip":
+        data, notebook_conversions = notebook_converter.convert_notebooks_in_zip(data)
+
+    object_name = f"{project_id}/{upload_id}/{file.filename}"
     content_type = file.content_type or "application/octet-stream"
     s3_path = upload_file(BUCKET_USER_CODE, object_name, data, content_type)
 
@@ -53,6 +80,8 @@ async def upload_code(
         "path": object_name,
         "s3_uri": s3_path,
         "size": len(data),
+        "conversion": conversion,
+        "notebook_conversions": notebook_conversions,
     }
 
 

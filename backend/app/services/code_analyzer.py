@@ -16,7 +16,6 @@ after the first restitution -- see [[plan-toasty-petting-hare]].
 from __future__ import annotations
 
 import ast
-import json
 import os
 import re
 from dataclasses import dataclass, asdict
@@ -53,13 +52,14 @@ def _resolve_entry(root: Path, hint: str = "") -> Path | None:
         if candidate.exists():
             return candidate
 
-    # First .ipynb
-    for p in sorted(root.rglob("*.ipynb")):
+    # First .py — mirrors the runner, which prefers scripts over notebooks
+    # since upload-time conversion ships a .py beside every notebook.
+    for p in sorted(root.rglob("*.py")):
         if not p.name.startswith("_"):
             return p
 
-    # First .py
-    for p in sorted(root.rglob("*.py")):
+    # First .ipynb
+    for p in sorted(root.rglob("*.ipynb")):
         if not p.name.startswith("_"):
             return p
 
@@ -70,66 +70,40 @@ def _resolve_entry(root: Path, hint: str = "") -> Path | None:
 
 
 def _notebook_to_source(nb_path: Path) -> tuple[str, list[tuple[int, int]], list[CodeWarning]]:
-    """Convert a notebook into one virtual Python source string for AST.
+    """Convert a notebook into the Python source the platform will actually run.
 
-    Returns (source, cell_line_offsets, magic_warnings) where
-    cell_line_offsets is a list of (cell_index, starting_line_in_virtual_source)
-    -- not currently used downstream but kept so future line→cell mapping
-    is easy.
+    Delegates to `notebook_converter` -- the same converter that produces the
+    uploaded `.py` -- so the analyzer's AST detectors see exactly the code
+    that executes on the cluster, and its conversion notes (pip installs
+    preserved, magics translated, cells commented out) surface as warnings.
+
+    Returns (source, cell_line_offsets, warnings); offsets kept for signature
+    compatibility.
     """
+    from app.services import notebook_converter
+
     try:
-        with nb_path.open(encoding="utf-8") as fh:
-            nb = json.load(fh)
+        data = nb_path.read_bytes()
     except Exception:
         return "", [], [CodeWarning(
             code="notebook_unreadable",
-            message=f"Could not parse notebook JSON in {nb_path.name}.",
+            message=f"Could not read {nb_path.name}.",
         )]
 
-    parts: list[str] = []
-    offsets: list[tuple[int, int]] = []
-    warnings: list[CodeWarning] = []
-    current_line = 1
-
-    for idx, cell in enumerate(nb.get("cells", [])):
-        if cell.get("cell_type") != "code":
-            continue
-
-        src = cell.get("source", "")
-        if isinstance(src, list):
-            src = "".join(src)
-
-        # Cell magics affect the whole cell -- nbconvert can't translate
-        # them, so we flag them and skip the cell entirely (mirrors the
-        # runtime strip in pipeline_service.py).
-        stripped_lead = src.lstrip()
-        if stripped_lead.startswith("%%"):
-            magic_name = stripped_lead.split("\n", 1)[0].split()[0]
-            warnings.append(CodeWarning(
-                code="cell_magic_remains",
-                message=(
-                    f"Cell magic `{magic_name}` will be stripped at runtime. "
-                    f"Make sure the cell doesn't depend on it."
-                ),
-                line_no=idx + 1,
-                snippet=magic_name,
-            ))
-            continue
-
-        # Drop single-line magics + shell escapes + get_ipython calls.
-        clean_lines: list[str] = []
-        for line in src.splitlines():
-            if re.match(r"^\s*(%|!|get_ipython)", line):
-                continue
-            clean_lines.append(line)
-        clean = "\n".join(clean_lines)
-
-        if clean.strip():
-            offsets.append((idx, current_line))
-            parts.append(clean)
-            current_line += clean.count("\n") + 1
-
-    return "\n".join(parts), offsets, warnings
+    result = notebook_converter.convert_notebook_bytes(data, nb_path.name)
+    warnings = [
+        CodeWarning(
+            code=w.code,
+            message=w.message,
+            severity=w.severity,
+            line_no=w.line_no,
+            snippet=w.snippet,
+        )
+        for w in result.warnings
+    ]
+    if not result.ok:
+        return "", [], warnings
+    return result.script, [], warnings
 
 
 # ── AST detectors ─────────────────────────────────────────────────────────

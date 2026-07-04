@@ -1,0 +1,178 @@
+%==============================================================================
+%  BILAN PÉRIODIQUE — DÉBUT DE STAGE (6ème semaine)
+%  Firas Mahjoubi — Plateforme MLOps — INSOMEA
+%  ESPRIT reflection form, filled in. Standalone; does not touch report/.
+%==============================================================================
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[french]{babel}
+\usepackage{lmodern}
+\usepackage[a4paper,top=1.6cm,bottom=1.8cm,left=2.2cm,right=2.2cm,headheight=14pt]{geometry}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{colortbl}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{amssymb}
+\usepackage{enumitem}
+\usepackage{tikz}
+\usepackage{fancyhdr}
+\usepackage{microtype}
+
+\graphicspath{{./}{../report/logo/}}
+
+% --- palette -----------------------------------------------------------------
+\definecolor{espritred}{RGB}{198,12,48}
+\definecolor{ink}{RGB}{33,37,41}
+\definecolor{steel}{RGB}{47,101,151}
+\definecolor{answer}{RGB}{40,70,110}
+\definecolor{rule}{RGB}{210,214,218}
+
+\color{ink}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{4pt}
+\renewcommand{\arraystretch}{1.4}
+
+% --- footer ------------------------------------------------------------------
+\pagestyle{fancy}
+\fancyhf{}
+\fancyfoot[C]{\footnotesize\thepage}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+
+% --- question / answer helpers ----------------------------------------------
+\newcommand{\question}[1]{\vspace{4pt}\textbf{\color{ink}#1}\par}
+\newcommand{\answer}[1]{\vspace{2pt}{\color{answer}#1}\par\vspace{6pt}}
+
+% rating chips (1..4), the chosen one filled red
+\newcommand{\rc}[1]{\tikz[baseline=-0.55ex]\node[circle,fill=espritred,text=white,inner sep=1.8pt,font=\bfseries\footnotesize]{#1};}
+\newcommand{\rp}[1]{\tikz[baseline=-0.55ex]\node[circle,draw=gray!55,text=gray!75,inner sep=1.8pt,font=\footnotesize]{#1};}
+\newcommand{\rate}[1]{%
+  \ifnum#1=1\rc1\else\rp1\fi\hspace{1.6em}%
+  \ifnum#1=2\rc2\else\rp2\fi\hspace{1.6em}%
+  \ifnum#1=3\rc3\else\rp3\fi\hspace{1.6em}%
+  \ifnum#1=4\rc4\else\rp4\fi}
+\newcommand{\rateblock}[3]{%
+  \vspace{3pt}\textbf{\color{ink}#1 ?}\par\vspace{3pt}
+  \rate{#2}\par\vspace{3pt}
+  {\color{answer}\textit{Pourquoi cette note :} #3}\par\vspace{7pt}}
+
+%==============================================================================
+\begin{document}
+
+% --- letterhead --------------------------------------------------------------
+\noindent\includegraphics[height=1.35cm,keepaspectratio]{Esprit}
+\vspace{0.2cm}
+
+\begin{center}
+  {\LARGE\bfseries\color{steel} Bilan périodique}\\[4pt]
+  {\Large\color{steel} Début de stage (6\textsuperscript{ème} semaine)}
+\end{center}
+\vspace{0.3cm}
+
+% --- identity table (red labels like the template) ---------------------------
+\begin{tabularx}{\textwidth}{|>{\columncolor{espritred}\color{white}\bfseries}p{4.4cm}|X|}
+\hline
+Nom et Prénom :        & Firas Mahjoubi \\ \hline
+Spécialité :           & Génie Logiciel \\ \hline
+Organisme d'accueil :  & INSOMEA \\ \hline
+\end{tabularx}
+
+\vspace{0.5cm}
+
+% --- open questions ----------------------------------------------------------
+\question{Qu'est-ce qui vous plaît et vous motive dans votre stage ?}
+\answer{Ce qui me motive le plus est de travailler sur un sujet à la fois technique
+et innovant : la construction d'une plateforme MLOps de bout en bout. J'apprécie de
+toucher à toute la chaîne — infrastructure Kubernetes, backend, frontend et outils
+de \emph{Machine Learning} — et de voir des briques concrètes prendre forme
+rapidement. L'autonomie accordée par INSOMEA et la possibilité de participer aux
+choix d'architecture rendent le travail particulièrement stimulant.}
+
+\question{Décrivez une situation de travail marquante que vous avez vécue pendant votre stage.}
+\answer{Une situation marquante a été la mise en service du serveur de suivi
+\textbf{MLflow} sur le cluster Kubernetes, connecté au stockage objet \textbf{MinIO}
+et à une base \textbf{PostgreSQL}. Après plusieurs itérations de configuration, voir
+la première expérience s'enregistrer automatiquement — métriques et artefacts — a
+été très gratifiant : c'était la validation concrète de l'architecture cible et le
+point de départ de tout le reste du projet.}
+
+\question{Avez-vous vécu pendant votre stage une situation difficile ou problématique ? Si oui, comment avez-vous réagi ?}
+\answer{Oui. La communication réseau entre les services internes du cluster (MLflow,
+MinIO) et le backend a posé problème : les services n'étaient pas joignables comme
+attendu. J'ai réagi de façon méthodique — lecture de la documentation, inspection
+des logs des pods, tests via \texttt{port-forward} — puis j'ai mis en place des
+règles d'\emph{ingress} et des variables d'environnement dédiées. Cette difficulté
+m'a appris l'importance de bien comprendre le réseau Kubernetes avant de coder.}
+
+\question{Que retirez-vous comme apprentissages depuis le début de votre stage (culture d'entreprise, particularité du secteur, du métier…) ?}
+\answer{J'ai découvert la culture de travail d'une société de conseil : rigueur,
+revues de code et communication régulière avec l'encadrant. J'ai aussi mieux compris
+la particularité du métier MLOps, à la frontière entre le développement logiciel,
+l'infrastructure \emph{cloud} et la \emph{data science}, où l'automatisation et la
+reproductibilité sont essentielles à la mise en production des modèles.}
+
+\question{Comment gérez-vous les délais dans votre travail ?}
+\answer{J'organise mon travail selon la méthodologie \textbf{Scrum} : le projet est
+découpé en sprints avec un \emph{backlog} priorisé. Je décompose chaque objectif en
+tâches, j'estime leur charge et je traite d'abord les éléments bloquants (par
+exemple l'environnement avant les fonctionnalités). Un point régulier avec mon
+encadrant me permet d'ajuster les priorités et de tenir les échéances.}
+
+\question{De quelle(s) manière(s) utilisez-vous vos capacités/talents dans votre stage ? \textit{Donnez des exemples concrets.}}
+\answer{J'utilise mes compétences \emph{full-stack} et ma capacité de résolution de
+problèmes. Concrètement : j'ai mis en place seul l'environnement (cluster, MLflow,
+MinIO, PostgreSQL), développé l'authentification \textbf{JWT} côté FastAPI ainsi que
+les écrans correspondants côté Angular. Ma curiosité technique m'aide à évaluer et à
+intégrer rapidement de nouveaux outils de l'écosystème \emph{cloud-native}.}
+
+\vspace{4pt}
+\begin{center}\color{rule}\rule{\textwidth}{0.6pt}\end{center}
+
+\textbf{À combien évaluez-vous votre capacité à :}\\
+{\small\itshape (1 : plus mauvaise note — 4 : meilleure note)}
+\vspace{6pt}
+
+\rateblock{Travailler en équipe}{3}{Le PFE est individuel, mais je collabore
+étroitement avec mon encadrant entreprise et l'équipe technique : échanges sur
+l'architecture, revues de code et respect des conventions communes.}
+
+\rateblock{Être autonome}{4}{Je gère le projet de façon largement autonome : j'ai
+installé et configuré seul l'ensemble de l'environnement et avancé sur le premier
+sprint sans supervision constante, en sollicitant mon encadrant surtout pour valider
+les choix structurants.}
+
+\rateblock{Être résilient}{3}{Face aux blocages techniques (réseau du cluster,
+intégration MLflow–MinIO), je reste calme et procède par élimination jusqu'à la
+solution, sans me décourager. Je continue de progresser sur la gestion de la
+frustration liée aux problèmes d'environnement.}
+
+\rateblock{Organiser votre travail dans les délais}{3}{Je planifie par sprints et je
+priorise les tâches bloquantes. J'ai respecté les échéances de mise en place de
+l'environnement et du premier sprint ; je cherche encore à affiner mes estimations
+de charge.}
+
+\rateblock{Prendre des initiatives}{4}{Lors de l'état de l'art, j'ai proposé et
+argumenté la pile technique (MLflow, KServe, MinIO) et anticipé certains choix
+(authentification \emph{stateless}, reproductibilité via \texttt{docker-compose})
+sans attendre qu'ils me soient demandés.}
+
+\rateblock{Réaliser un travail de qualité \textmd{\textit{(rigueur professionnelle, être appliqué…)}}}{3}{Je
+soigne la structure du code et la documentation, et je teste mes fonctionnalités
+avant de les valider. Je vise une rigueur professionnelle constante et continue de
+renforcer la couverture de tests.}
+
+\vspace{2pt}
+\begin{center}\color{rule}\rule{\textwidth}{0.6pt}\end{center}
+
+\textbf{Souhaitez-vous me contacter pour échanger sur le déroulement de votre stage ?}
+\par\vspace{4pt}
+{\large $\boxtimes$}~Oui \hspace{2.2cm} {\large $\square$}~Non
+\par\vspace{6pt}
+\textbf{Par quel moyen (par téléphone, mail, rendez-vous…) ?}
+\answer{Par e-mail (frsmahjoubi@gmail.com) ou lors d'un rendez-vous en ligne, selon
+votre disponibilité.}
+
+\end{document}

@@ -36,6 +36,7 @@
 %------------------------------------------------------------------ graphics/color
 \usepackage{graphicx}
 \graphicspath{{images/}{logo/}}
+\usepackage{pdfpages}  % include the official ESPRIT cover + validation form (PDF)
 \usepackage{wrapfig}   % float technology logos beside their description
 \usepackage{xcolor}
 \usepackage{colortbl}   % \rowcolor for shaded table header rows
@@ -113,9 +114,42 @@
   pdftitle={MLOps Platform — PFE Report},
   pdfauthor={Firas Mahjoubi},
 }
-\usepackage{pgfgantt}   % planning Gantt (Chapter 3)
-\usepackage{pgfplots}   % burndown charts (sprint chapters)
-\pgfplotsset{compat=1.18}
+%------------------------------------------------------------------ diagrams (TikZ)
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,backgrounds,shadows.blur,calc,shapes.geometric}
+
+% Modern "flat + depth" diagram palette and node styles, shared by the
+% application/pipeline figures. Subtle blur shadows give a light 3-D lift.
+\definecolor{diagblue}{HTML}{0B5394}
+\definecolor{diagteal}{HTML}{0E7C7B}
+\definecolor{diaggreen}{HTML}{2E7D32}
+\definecolor{diagamber}{HTML}{B26A00}
+\definecolor{diagslate}{HTML}{34495E}
+\tikzset{
+  >={Latex[length=2.6mm]},
+  softshadow/.style={blur shadow={shadow blur steps=6,shadow xshift=1pt,
+                     shadow yshift=-1.6pt,shadow opacity=32}},
+  stagenode/.style={rounded corners=5pt,draw=diagblue!55,line width=0.8pt,
+                    fill=diagblue!10,softshadow,align=center,
+                    font=\footnotesize\bfseries,text=diagslate,
+                    minimum width=2.05cm,minimum height=1.05cm,inner sep=3pt},
+  stepnode/.style={rounded corners=4pt,draw=diagteal!60,line width=0.8pt,
+                   fill=diagteal!10,softshadow,align=center,
+                   font=\scriptsize\bfseries,text=diagslate,
+                   minimum width=2.2cm,minimum height=1.15cm,inner sep=3pt},
+  storenode/.style={rounded corners=4pt,draw=diagamber!70,line width=0.8pt,
+                    fill=diagamber!10,softshadow,align=center,
+                    font=\scriptsize\bfseries,text=diagslate,
+                    minimum width=2.3cm,minimum height=1.15cm,inner sep=3pt},
+  layernode/.style={rounded corners=3pt,draw=diagblue!45,line width=0.8pt,
+                    fill=diagblue!8,softshadow,align=center,
+                    font=\small\bfseries,text=diagslate,
+                    minimum height=1.15cm,inner sep=4pt},
+  flowarrow/.style={->,line width=1pt,draw=diagblue!70},
+  backarrow/.style={->,line width=1pt,draw=diagamber!75,dashed},
+  clusterbox/.style={rounded corners=7pt,draw=diagblue!35,dashed,line width=1pt,
+                     fill=diagblue!3,inner sep=9pt},
+}
 
 % Visible placeholder marker for content the author must still fill in.
 % Renders as a red [TODO: ...] so it can't be mistaken for finished text.
@@ -156,8 +190,17 @@
 
 %---------------------------------------------------------------- front matter
 \pagenumbering{roman}
-\input{frontmatter/coverpage}
+% Official ESPRIT cover: drop frontmatter/cover_official.pdf in to use it;
+% falls back to the hand-built LaTeX cover until that PDF is present.
+\IfFileExists{frontmatter/cover_official.pdf}
+  {\includepdf[pages=-,fitpaper=true]{frontmatter/cover_official.pdf}}
+  {\input{frontmatter/coverpage}}
 \cleardoublepage
+% Supervisor validation form — inserted right after the cover, as the faculty
+% requires. Shown only once frontmatter/validation_form.pdf is provided.
+\IfFileExists{frontmatter/validation_form.pdf}
+  {\includepdf[pages=-,fitpaper=true]{frontmatter/validation_form.pdf}\cleardoublepage}
+  {}
 
 \input{frontmatter/dedication}
 \cleardoublepage

@@ -1,0 +1,188 @@
+%==============================================================================
+%  BILAN PÉRIODIQUE — MILIEU DE STAGE (15ème semaine)
+%  Firas Mahjoubi — Plateforme MLOps — INSOMEA
+%  ESPRIT reflection form, filled in. Standalone; does not touch report/.
+%==============================================================================
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[french]{babel}
+\usepackage{lmodern}
+\usepackage[a4paper,top=1.6cm,bottom=1.8cm,left=2.2cm,right=2.2cm,headheight=14pt]{geometry}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{colortbl}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{amssymb}
+\usepackage{enumitem}
+\usepackage{tikz}
+\usepackage{fancyhdr}
+\usepackage{microtype}
+
+\graphicspath{{./}{../report/logo/}}
+
+% --- palette -----------------------------------------------------------------
+\definecolor{espritred}{RGB}{198,12,48}
+\definecolor{ink}{RGB}{33,37,41}
+\definecolor{steel}{RGB}{47,101,151}
+\definecolor{answer}{RGB}{40,70,110}
+\definecolor{rule}{RGB}{210,214,218}
+
+\color{ink}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{4pt}
+\renewcommand{\arraystretch}{1.4}
+
+% --- footer ------------------------------------------------------------------
+\pagestyle{fancy}
+\fancyhf{}
+\fancyfoot[C]{\footnotesize\thepage}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+
+% --- question / answer helpers ----------------------------------------------
+\newcommand{\question}[1]{\vspace{4pt}\textbf{\color{ink}#1}\par}
+\newcommand{\answer}[1]{\vspace{2pt}{\color{answer}#1}\par\vspace{6pt}}
+
+% rating chips (1..4), the chosen one filled red
+\newcommand{\rc}[1]{\tikz[baseline=-0.55ex]\node[circle,fill=espritred,text=white,inner sep=1.8pt,font=\bfseries\footnotesize]{#1};}
+\newcommand{\rp}[1]{\tikz[baseline=-0.55ex]\node[circle,draw=gray!55,text=gray!75,inner sep=1.8pt,font=\footnotesize]{#1};}
+\newcommand{\rate}[1]{%
+  \ifnum#1=1\rc1\else\rp1\fi\hspace{1.6em}%
+  \ifnum#1=2\rc2\else\rp2\fi\hspace{1.6em}%
+  \ifnum#1=3\rc3\else\rp3\fi\hspace{1.6em}%
+  \ifnum#1=4\rc4\else\rp4\fi}
+\newcommand{\rateblock}[3]{%
+  \vspace{3pt}\textbf{\color{ink}#1 ?}\par\vspace{3pt}
+  \rate{#2}\par\vspace{3pt}
+  {\color{answer}\textit{Pourquoi cette note :} #3}\par\vspace{7pt}}
+
+%==============================================================================
+\begin{document}
+
+% --- letterhead --------------------------------------------------------------
+\noindent\includegraphics[height=1.35cm,keepaspectratio]{Esprit}
+\vspace{0.2cm}
+
+\begin{center}
+  {\LARGE\bfseries\color{steel} Bilan périodique}\\[4pt]
+  {\Large\color{steel} Milieu de stage (15\textsuperscript{ème} semaine)}
+\end{center}
+\vspace{0.3cm}
+
+% --- identity table (red labels like the template) ---------------------------
+\begin{tabularx}{\textwidth}{|>{\columncolor{espritred}\color{white}\bfseries}p{4.4cm}|X|}
+\hline
+Nom et Prénom :        & Firas Mahjoubi \\ \hline
+Spécialité :           & Génie Logiciel \\ \hline
+Organisme d'accueil :  & INSOMEA \\ \hline
+\end{tabularx}
+
+\vspace{0.5cm}
+
+% --- open questions ----------------------------------------------------------
+\question{Vos missions ont-elles évolué depuis le début de votre stage ? Si oui, quelles sont-elles ? \textit{Donnez des exemples concrets de la réalisation de ces missions.}}
+\answer{Oui, mes missions se sont élargies au fil de l'avancement. Après les
+fondations (authentification, gestion des projets), je suis passé au cœur du
+produit : le \textbf{pipeline d'entraînement}. J'ai mis en place l'exécution du code
+utilisateur dans des pods isolés sur Kubernetes, avec capture automatique des
+métriques et artefacts via \textbf{MLflow}. Je travaille désormais sur le
+\textbf{registre de modèles} et le \textbf{déploiement} : transformer un
+\emph{run} réussi en service d'inférence en ligne avec \textbf{KServe}. Exemple
+concret : un utilisateur peut aujourd'hui téléverser un notebook, l'exécuter sur le
+cluster, comparer ses expériences, puis déployer le meilleur modèle en un clic.}
+
+\question{Citez une de vos réalisations dont vous êtes fier/ère.}
+\answer{La réalisation dont je suis le plus fier est le \textbf{pipeline
+d'entraînement automatique} : un script ou un notebook téléversé est exécuté dans un
+pod isolé, ses dépendances installées, et ses résultats (métriques, paramètres,
+modèle) enregistrés automatiquement dans MLflow — sans que l'utilisateur ait à
+modifier son code. Voir un notebook « réel » s'exécuter de bout en bout sur le
+cluster et produire un modèle suivi a été un vrai aboutissement.}
+
+\question{Comment avez-vous procédé pour mener à bien cette mission ?}
+\answer{J'ai décomposé la mission en étapes : d'abord le stockage et le
+téléversement du code, puis l'exécution en pod (téléchargement, installation des
+dépendances, lancement), enfin l'instrumentation via un « runner » qui active
+l'\emph{autolog} MLflow avant de lancer le script de l'utilisateur. J'ai validé
+chaque brique isolément avec des cas réels (notebooks issus de Colab), puis intégré
+et fiabilisé l'ensemble (conversion des notebooks, gestion des dépendances
+conflictuelles).}
+
+\question{Quels ont été vos défis pendant votre stage ? \textit{(points qui semblaient difficiles voire impossibles à aborder)}}
+\answer{Le principal défi a été de faire fonctionner de façon fiable du code
+utilisateur arbitraire — souvent des notebooks non prévus pour une exécution
+automatisée : magies interactives, appels bloquants (\texttt{plt.show()},
+\texttt{input()}), modules propres à l'environnement (\texttt{google.colab}),
+versions de paquets en conflit. Au départ, gérer tous ces cas semblait presque
+impossible. Le déploiement avec KServe (mode \emph{RawDeployment}, \emph{ingress})
+a également représenté un défi d'infrastructure.}
+
+\question{Comment avez-vous réussi à les surmonter ? Ou, avec le recul, comment auriez-vous pu les surmonter ?}
+\answer{J'ai construit un « runner » robuste qui convertit les notebooks en scripts,
+neutralise les appels bloquants, installe des \emph{shims} de compatibilité et
+détecte/installe les dépendances manquantes avec des versions épinglées. J'ai
+procédé de manière incrémentale, en testant sur des notebooks réels jusqu'à obtenir
+une exécution stable. Pour KServe, la lecture approfondie de la documentation de
+l'opérateur et l'expérimentation m'ont permis de trouver la bonne configuration.
+Avec le recul, lire la documentation de l'opérateur de bout en bout dès le départ
+m'aurait fait gagner du temps.}
+
+\question{Comment votre stage confirme-t-il ou infirme-t-il votre projet professionnel ?}
+\answer{Ce stage \textbf{confirme} pleinement mon projet professionnel : je souhaite
+m'orienter vers l'ingénierie \emph{DevOps/MLOps} et le développement
+\emph{cloud-native}. Travailler sur toute la chaîne — infrastructure Kubernetes,
+backend et outils MLOps — a renforcé mon goût pour l'automatisation et la mise en
+production des systèmes, et m'a confirmé que ce domaine, à l'intersection du
+logiciel et de la \emph{data}, correspond à ce que je veux faire.}
+
+\vspace{4pt}
+\begin{center}\color{rule}\rule{\textwidth}{0.6pt}\end{center}
+
+\textbf{Comment évaluez-vous votre capacité à :}\\
+{\small\itshape (1 : plus mauvaise note — 4 : meilleure note)}
+\vspace{6pt}
+
+\rateblock{Travailler en équipe}{4}{Je collabore régulièrement avec mon encadrant et
+l'équipe : présentations d'avancement, revues de code et intégration des retours.
+J'ai gagné en aisance dans la communication technique et la prise en compte des
+besoins.}
+
+\rateblock{Être autonome}{4}{Je conçois et implémente les fonctionnalités de façon
+autonome, du pipeline d'entraînement au déploiement, en menant seul l'investigation
+technique et en ne sollicitant l'encadrement que pour les arbitrages importants.}
+
+\rateblock{Être résilient}{4}{La fiabilisation de l'exécution de notebooks réels a
+demandé de nombreuses itérations et de la persévérance. J'ai su ne pas me décourager
+face à des bugs difficiles et transformer ces obstacles en un composant robuste —
+d'où une note en progression par rapport au début de stage.}
+
+\rateblock{Organiser votre travail dans les délais}{3}{Je tiens globalement le rythme
+des sprints, mais certaines tâches (gestion des dépendances, configuration de
+l'opérateur de déploiement) ont pris plus de temps que prévu. Je progresse encore
+sur l'estimation des tâches à forte incertitude technique.}
+
+\rateblock{Prendre des initiatives}{4}{J'ai proposé des améliorations non
+demandées : diagnostic automatique des runs en échec, regroupement des expériences
+par modèle, et possibilité de promouvoir un \emph{run} en modèle déployable
+directement depuis l'interface.}
+
+\rateblock{Réaliser un travail de qualité \textmd{\textit{(rigueur professionnelle, être appliqué…)}}}{4}{Je
+structure et documente le code, gère les cas d'erreur (messages clairs pour
+l'utilisateur) et teste sur des cas réels avant validation. La robustesse du
+« runner » et la clarté des messages d'erreur témoignent de cette rigueur.}
+
+\vspace{2pt}
+\begin{center}\color{rule}\rule{\textwidth}{0.6pt}\end{center}
+
+\textbf{Souhaitez-vous me contacter pour échanger sur le déroulement de votre stage ?}
+\par\vspace{4pt}
+{\large $\boxtimes$}~Oui \hspace{2.2cm} {\large $\square$}~Non
+\par\vspace{6pt}
+\textbf{Par quel moyen (par téléphone, mail, rendez-vous…) ?}
+\answer{Par e-mail (frsmahjoubi@gmail.com) ou lors d'un rendez-vous en ligne, selon
+votre disponibilité.}
+
+\end{document}

@@ -8,7 +8,7 @@
 This first sprint, \emph{Foundation}, lays the groundwork of the platform: a secure
 authentication system and the project entity around which all later work is
 organized. This chapter presents the sprint backlog, the analysis and functional
-specification, the design, the implementation, and the sprint review.
+specification, the design, the implementation, and the testing and validation.
 
 % ---------------------------------------------------------------------------
 \section{Sprint Backlog}
@@ -21,10 +21,10 @@ specification, the design, the implementation, and the sprint review.
 \hline
 1 & Design the user and project data model & 2\\ \hline
 1 & Implement signup / login / refresh with JWT & 3\\ \hline
-1 & Build the login and signup user interface & 2\\ \hline
-2 & Implement project CRUD with ownership checks & 3\\ \hline
+1 & Build the login and signup user interface & 1\\ \hline
+2 & Implement project CRUD with ownership checks & 2\\ \hline
 2 & Bind each project to its own tracking experiment & 1\\ \hline
-2 & Build the projects list and detail interface & 2\\ \hline
+2 & Build the projects list and detail interface & 1\\ \hline
 \end{tabularx}
 \end{table}
 
@@ -175,7 +175,7 @@ projects view from which the user creates and manages projects.
 % ---------------------------------------------------------------------------
 \section{Testing and Validation}
 Each increment was validated manually against its acceptance scenarios before
-the sprint review. Table~\ref{tab:tests-s1} summarizes the main test scenarios of
+the sprint closed. Table~\ref{tab:tests-s1} summarizes the main test scenarios of
 Sprint~1 and their outcomes.
 
 \begin{table}[H]\centering
@@ -196,35 +196,6 @@ Open another user's project by its identifier & \texttt{404}, resource invisible
 \end{table}
 
 % ---------------------------------------------------------------------------
-\section{Sprint Review}
-At the end of Sprint~1 the platform supports secure authentication and full
-project management, the foundation every later sprint builds upon. The burndown
-chart below tracks remaining effort across the sprint.
-\begin{figure}[H]\centering
-\begin{tikzpicture}
-\begin{axis}[
-    width=0.8\textwidth, height=6cm,
-    xlabel={Day}, ylabel={Remaining points},
-    xmin=0, xmax=10, ymin=0, ymax=14,
-    legend pos=north east, grid=both,
-]
-\addplot[dashed,gray] coordinates {(0,13)(9,0)};         % ideal
-\addplot[thick,primary,mark=*] coordinates {              % actual
-  (0,13)(1,13)(2,11)(3,9)(4,8)(5,6)(6,5)(7,3)(8,1)(9,0)};
-\legend{Ideal, Actual}
-\end{axis}
-\end{tikzpicture}
-\caption{Sprint~1 burndown chart}\label{fig:burndown-s1}
-\end{figure}
-
-\noindent\textbf{Retrospective.}
-What went well: the authentication and project foundations were delivered on
-schedule, and settling the token-refresh mechanism early meant no later sprint
-had to revisit session handling. To improve: too much of the first week went into
-environment setup rather than stories; the lesson, applied from Sprint~2 onward,
-was to keep a running development cluster and seed data ready before the sprint
-starts.
-
 \section*{Conclusion}
 Sprint~1 delivered the security and project foundations of the platform. The next
 sprint builds on them to upload, run, and track training jobs on the cluster.

@@ -23,7 +23,7 @@ the same structure as the previous one.
 3 & Auto-detect the entry script in an upload & 2\\ \hline
 4 & Build the training pipeline (download $\to$ run $\to$ autolog) & 5\\ \hline
 4 & Convert notebooks to scripts and inject the autolog wrapper & 3\\ \hline
-5 & Enable automatic capture of metrics, parameters, artifacts & 3\\ \hline
+5 & Enable automatic capture of metrics, parameters, artifacts & 5\\ \hline
 6 & Stream live pipeline logs to the UI & 3\\ \hline
 7 & Build the experiments browsing interface & 3\\ \hline
 \end{tabularx}
@@ -140,7 +140,33 @@ pod: it downloads the code (and dataset) from the object store, installs any
 missing dependencies, and runs the entry script. Notebooks are first converted to
 a Python script. The script is not run directly, it is wrapped by a generated
 runner that enables automatic experiment tracking before handing control to the
-user's code.
+user's code. Figure~\ref{fig:pipeline-flow} shows the pipeline's stages, from the
+trigger to the captured experiment.
+
+\begin{figure}[H]\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}
+  \node[stagenode,fill=diagblue!12] (trig) {Trigger\\run};
+  \node[stepnode,right=1.5cm of trig] (dl) {Download\\code + data};
+  \node[stepnode,right=0.5cm of dl] (dep) {Install\\dependencies};
+  \node[stepnode,right=0.5cm of dep] (conv) {Convert\\notebook};
+  \node[stepnode,right=0.5cm of conv] (run) {Autolog\\runner + run};
+  \node[storenode,right=1.5cm of run] (ml) {\includegraphics[height=0.5cm]{mlflow}\\metrics \textperiodcentered{} params\\artifacts};
+  \node[stagenode,below=1.1cm of conv,fill=diaggreen!10,draw=diaggreen!60] (logs) {Live logs\\$\rightarrow$ UI};
+  \begin{scope}[on background layer]
+    \node[clusterbox,fit=(dl)(dep)(conv)(run),
+          label={[font=\scriptsize\bfseries,text=diagblue]above:{Isolated pod (Kubernetes)}}] (pod) {};
+  \end{scope}
+  \draw[flowarrow] (trig) -- (dl);
+  \draw[flowarrow] (dl) -- (dep);
+  \draw[flowarrow] (dep) -- (conv);
+  \draw[flowarrow] (conv) -- (run);
+  \draw[flowarrow] (run) -- (ml);
+  \draw[flowarrow,draw=diaggreen!70] (pod.south) -- (logs);
+\end{tikzpicture}}
+\caption{Training pipeline: from trigger to captured experiment}
+\label{fig:pipeline-flow}
+\end{figure}
 
 \begin{lstlisting}[language=Python,caption={The generated runner enables autologging before running the user's script.},label={lst:runner}]
 import os, runpy, mlflow
@@ -197,35 +223,6 @@ Watch logs during a run & Log lines stream to the browser while the pod executes
 \end{table}
 
 % ---------------------------------------------------------------------------
-\section{Sprint Review}
-At the end of Sprint~2 a user can upload arbitrary code, run it on the cluster, and
-see metrics and artifacts captured automatically, the platform now \emph{trains
-and tracks}.
-\begin{figure}[H]\centering
-\begin{tikzpicture}
-\begin{axis}[
-    width=0.8\textwidth, height=6cm,
-    xlabel={Day}, ylabel={Remaining points},
-    xmin=0, xmax=12, ymin=0, ymax=24,
-    legend pos=north east, grid=both,
-]
-\addplot[dashed,gray] coordinates {(0,22)(11,0)};
-\addplot[thick,primary,mark=*] coordinates {
-  (0,22)(1,22)(2,20)(3,18)(4,16)(5,13)(6,11)(7,9)(8,7)(9,4)(10,2)(11,0)};
-\legend{Ideal, Actual}
-\end{axis}
-\end{tikzpicture}
-\caption{Sprint~2 burndown chart}\label{fig:burndown-s2}
-\end{figure}
-
-\noindent\textbf{Retrospective.}
-What went well: the autolog wrapper proved the right abstraction, users get full
-experiment tracking without changing a line of their code. To improve: the
-training and tracking pipeline was the most technically demanding increment, and
-handling messy real-world notebooks (runtime-only modules, conflicting
-dependency versions) consumed more time than estimated; the diagnostics work
-later scheduled in Sprint~4 was a direct consequence of this experience.
-
 \section*{Conclusion}
 Sprint~2 turned the platform into a working training-and-tracking engine. The next
 sprint makes the resulting models deployable and queryable.

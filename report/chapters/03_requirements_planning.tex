@@ -190,7 +190,7 @@ Table~\ref{tab:backlog}, so every implemented task is connected to a requirement
 The project ran over six months, from 12 January 2026, opening with a framing and
 state-of-the-art phase, followed by the four sprints, with the report written in
 parallel throughout. Table~\ref{tab:schedule} lists the phases with their dates and
-durations, and Figure~\ref{fig:gantt} visualizes the same schedule.
+durations.
 
 \begin{table}[H]\centering
 \renewcommand{\arraystretch}{1.35}
@@ -208,33 +208,6 @@ Sprint 4 & 04 May -- 14 Jun & 6 weeks & Observability, public API, and administr
 Report writing & 12 Jan -- 11 Jul & Continuous & Drafting and revising the report in parallel\\ \hline
 \end{tabularx}
 \end{table}
-
-\begin{figure}[H]\centering
-\begin{ganttchart}[
-    hgrid={*{1}{draw=black!15}},
-    x unit=0.048cm,
-    y unit chart=0.8cm,
-    y unit title=0.62cm,
-    bar height=0.58,
-    bar top shift=0.21,
-    bar/.append style={fill=primary!70, rounded corners=2pt},
-    bar label font=\small,
-    title label font=\small\bfseries,
-    title/.append style={fill=primary!15},
-    time slot format=isodate,
-]{2026-01-12}{2026-07-31}
-  \gantttitlecalendar{year, month=shortname} \\
-  \ganttbar{Framing \& State of the Art}{2026-01-12}{2026-02-01} \\
-  \ganttbar{Sprint 1, Foundation}{2026-02-02}{2026-03-01} \\
-  \ganttbar{Sprint 2, Training \& Tracking}{2026-03-02}{2026-04-05} \\
-  \ganttbar{Sprint 3, Registry \& Deployment}{2026-04-06}{2026-05-03} \\
-  \ganttbar{Sprint 4, Observability \& Serving}{2026-05-04}{2026-06-14} \\
-  \ganttbar[bar/.append style={fill=primary!35, rounded corners=2pt}]%
-    {Report writing}{2026-01-12}{2026-07-11}
-\end{ganttchart}
-\caption{Project schedule (Gantt chart)}
-\label{fig:gantt}
-\end{figure}
 
 % ---------------------------------------------------------------------------
 \section{Application Architecture}
@@ -254,6 +227,34 @@ replaceable:
   \item \textbf{Data layer}, SQLAlchemy models mapped onto PostgreSQL, holding
         users, projects, pipeline runs, models, deployments, and API keys.
 \end{itemize}
+
+Figure~\ref{fig:layered-arch} shows these layers together with the cluster systems
+that the service layer orchestrates.
+
+\begin{figure}[H]\centering
+\begin{tikzpicture}
+  \node[layernode,minimum width=6.6cm] (pres) {Presentation --- Angular SPA};
+  \node[layernode,minimum width=6.6cm,below=0.55cm of pres] (api) {API --- FastAPI routers};
+  \node[layernode,minimum width=6.6cm,below=0.55cm of api] (svc) {Service --- business logic};
+  \node[layernode,minimum width=6.6cm,below=0.55cm of svc] (data) {Data --- SQLAlchemy / PostgreSQL};
+  \foreach \a/\b in {pres/api,api/svc,svc/data}{
+    \draw[flowarrow] (\a) -- (\b);
+  }
+  \node[storenode,right=2.4cm of svc,yshift=1.7cm] (mlf) {\includegraphics[height=0.4cm]{mlflow}\ MLflow};
+  \node[storenode,right=2.4cm of svc,yshift=0.55cm] (mio) {\includegraphics[height=0.38cm]{minio}\ MinIO};
+  \node[storenode,right=2.4cm of svc,yshift=-0.6cm] (ksv) {\includegraphics[height=0.38cm]{kserve}\ KServe};
+  \node[storenode,right=2.4cm of svc,yshift=-1.75cm] (kfp) {\includegraphics[height=0.38cm]{kubeflow}\ KFP / Argo};
+  \foreach \t in {mlf,mio,ksv,kfp}{
+    \draw[flowarrow,draw=diagamber!75] (svc.east) -- (\t.west);
+  }
+  \begin{scope}[on background layer]
+    \node[clusterbox,fit=(mlf)(mio)(ksv)(kfp),
+          label={[font=\scriptsize\bfseries,text=diagblue]above:{Cluster systems}}] {};
+  \end{scope}
+\end{tikzpicture}
+\caption{Layered application architecture and the cluster systems it orchestrates}
+\label{fig:layered-arch}
+\end{figure}
 
 This separation means, for example, that the deployment logic can talk to KServe
 through a single service module without the \gls{api} layer knowing how an

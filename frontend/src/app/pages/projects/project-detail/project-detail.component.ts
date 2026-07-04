@@ -5,7 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { BaseChartDirective } from 'ng2-charts';
 import { ChartConfiguration, ChartData } from 'chart.js';
 import { ProjectService } from '../../../core/services/project.service';
-import { UploadService, UploadedFile, CodeWarning } from '../../../core/services/upload.service';
+import { UploadService, UploadedFile, CodeWarning, NotebookConversion, ZipNotebookConversion } from '../../../core/services/upload.service';
 import { ExperimentService, MlflowRun } from '../../../core/services/experiment.service';
 import { PipelineService, PipelineRun, RunLogs, RunError } from '../../../core/services/pipeline.service';
 import { ModelService, ModelVersion, ModelStage } from '../../../core/services/model.service';
@@ -268,6 +268,39 @@ interface ExperimentGroup {
             @if (uploadSuccess) {
               <div class="bg-green-500/10 border border-green-500/50 text-green-400 px-4 py-3 rounded-lg mb-6 text-sm">
                 File uploaded successfully!
+              </div>
+            }
+
+            <!-- Notebook → script auto-conversion result -->
+            @if (conversionInfo?.ok) {
+              <div class="bg-violet-500/10 border border-violet-500/30 rounded-lg px-4 py-3 mb-6 flex items-start gap-3">
+                <app-icon name="zap" className="w-4 h-4 text-violet-300 mt-0.5 shrink-0"></app-icon>
+                <div class="text-[13px] text-ink2">
+                  Notebook auto-converted to
+                  <span class="mono text-violet-200">{{ conversionInfo?.script_filename }}</span>
+                  — this script is what runs on the cluster (selected for you in Run Code).
+                  @if ((conversionInfo?.pip_packages ?? []).length > 0) {
+                    <span class="text-ink3"> Detected installs: {{ conversionInfo?.pip_packages?.join(', ') }}.</span>
+                  }
+                </div>
+              </div>
+            } @else if (conversionInfo && !conversionInfo.ok) {
+              <div class="bg-amber-500/5 border border-amber-500/30 rounded-lg px-4 py-3 mb-6 flex items-start gap-3">
+                <app-icon name="warn" className="w-4 h-4 text-amber-400 mt-0.5 shrink-0"></app-icon>
+                <div class="text-[13px] text-ink2">
+                  The notebook couldn't be converted at upload — it will be converted
+                  inside the training pod instead (details below).
+                </div>
+              </div>
+            }
+            @if (zipConversions.length > 0) {
+              <div class="bg-violet-500/10 border border-violet-500/30 rounded-lg px-4 py-3 mb-6 flex items-start gap-3">
+                <app-icon name="zap" className="w-4 h-4 text-violet-300 mt-0.5 shrink-0"></app-icon>
+                <div class="text-[13px] text-ink2">
+                  {{ zipConversions.length }} notebook{{ zipConversions.length === 1 ? '' : 's' }} in the archive
+                  auto-converted to script{{ zipConversions.length === 1 ? '' : 's' }}
+                  (<span class="mono text-violet-200">{{ zipConversionNames }}</span>).
+                </div>
               </div>
             }
 
@@ -1954,6 +1987,17 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
   uploadSuccess = false;
   pipelineTriggerSuccess = '';
 
+  // Notebook → script auto-conversion (result of the last upload)
+  conversionInfo: NotebookConversion | null = null;
+  zipConversions: ZipNotebookConversion[] = [];
+
+  get zipConversionNames(): string {
+    return this.zipConversions
+      .filter(c => c.ok && c.script)
+      .map(c => c.script)
+      .join(', ');
+  }
+
   // Pre-flight code analyzer (static AST scan of the last uploaded script)
   analyzingCode = false;
   analyzedFileName = '';
@@ -2540,11 +2584,22 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
       this.uploading = true;
       this.uploadingFileName = file.name;
       this.uploadSuccess = false;
+      this.conversionInfo = null;
+      this.zipConversions = [];
 
       this.uploadService.upload(projectId, file).subscribe({
         next: (res) => {
           this.uploading = false;
           this.uploadSuccess = true;
+          this.conversionInfo = res.conversion ?? null;
+          this.zipConversions = res.notebook_conversions ?? [];
+          // Pre-select the file the Run Code tab should execute: for a
+          // notebook that's the auto-converted script, not the .ipynb.
+          if (res.conversion?.ok && res.conversion.script_path) {
+            this.selectedCodePath = res.conversion.script_path;
+          } else if (this.isAnalyzable(file.name)) {
+            this.selectedCodePath = res.path;
+          }
           this.loadFiles(projectId);
           this.runCodeAnalysis(projectId, res.path, file.name);
           setTimeout(() => (this.uploadSuccess = false), 3000);

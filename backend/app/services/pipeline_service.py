@@ -99,16 +99,19 @@ def run_custom_code(
                 if os.path.exists(f"{workdir}/{candidate}"):
                     entry_script = candidate
                     break
-        if not entry_script:
-            notebooks = find_files(".ipynb")
-            if notebooks:
-                entry_script = notebooks[0]
-                print(f"[platform] Auto-detected notebook: {entry_script}")
+        # Prefer .py over .ipynb: the backend converts notebooks to scripts at
+        # upload time and ships them alongside, so a plain script is the
+        # already-converted, preferred entry point.
         if not entry_script:
             py_files = find_files(".py")
             if py_files:
                 entry_script = py_files[0]
                 print(f"[platform] Auto-detected script: {entry_script}")
+        if not entry_script:
+            notebooks = find_files(".ipynb")
+            if notebooks:
+                entry_script = notebooks[0]
+                print(f"[platform] Auto-detected notebook: {entry_script}")
         if not entry_script:
             raise RuntimeError(f"No Python/notebook file found in: {os.listdir(workdir)}")
 
@@ -224,6 +227,16 @@ def run_custom_code(
             "matplotlib.use('Agg')\n"
             "import matplotlib.pyplot as _plt\n"
             "_plt.show = lambda *a, **kw: None\n"
+            # Headless-notebook shims: display() is a Jupyter builtin that
+            # doesn't exist in a plain interpreter, and input() would block
+            # forever (the pod has no stdin) -- print/return-empty instead.
+            "import builtins as _bi\n"
+            "if not hasattr(_bi, 'display'):\n"
+            "    _bi.display = print\n"
+            "def _platform_input(prompt=''):\n"
+            "    print('[platform] input(' + repr(prompt) + ') called in a headless run - returning empty string')\n"
+            "    return ''\n"
+            "_bi.input = _platform_input\n"
             "import mlflow\n"
             # Backward-compat patch: sklearn removed Imputer in 0.22; map it to SimpleImputer
             "try:\n"

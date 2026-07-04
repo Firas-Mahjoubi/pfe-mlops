@@ -72,7 +72,22 @@ which makes classic \gls{cicd} insufficient on its own. A complete machine-learn
 lifecycle therefore spans the loop: ingest \textbf{data}, \textbf{train} a model,
 \textbf{track} its parameters and metrics, \textbf{register} and version it,
 \textbf{deploy} it as a service, \textbf{monitor} it, and let external applications
-\textbf{consume} it.
+\textbf{consume} it. Figure~\ref{fig:mlops-lifecycle} depicts this loop.
+
+\begin{figure}[H]\centering
+\begin{tikzpicture}
+  \foreach \name [count=\n from 0] in {Upload,Train,Track,Register,Deploy,Serve,Consume,Monitor}{
+    \node[stagenode] (s\n) at ({4.7*cos(90-\n*45)},{3.15*sin(90-\n*45)}) {\name};
+  }
+  \foreach \a/\b in {0/1,1/2,2/3,3/4,4/5,5/6,6/7,7/0}{
+    \draw[flowarrow] (s\a) to[bend right=11] (s\b);
+  }
+  \node[align=center,font=\small\itshape,text=diagblue] at (0,0)
+    {The end-to-end\\MLOps lifecycle};
+\end{tikzpicture}
+\caption{The end-to-end \gls{mlops} lifecycle automated by the platform}
+\label{fig:mlops-lifecycle}
+\end{figure}
 
 In practice, teams that lack a dedicated platform carry out this lifecycle
 manually:

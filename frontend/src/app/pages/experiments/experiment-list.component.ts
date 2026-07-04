@@ -145,15 +145,27 @@ export class ExperimentListComponent implements OnInit {
     }
   }
 
+  // Eval metrics matched by pattern (MLflow suffixes them with the dataset
+  // name, e.g. accuracy_score_X_test / f1_score_unknown_dataset); training_*
+  // can never match, so runs are summarized by real evaluation numbers.
+  private readonly headlineSpecs: { label: string; match: RegExp }[] = [
+    { label: 'accuracy', match: /^(?:test_|val_|eval_)?accuracy(?:_score)?(?:_.*)?$/i },
+    { label: 'f1', match: /^(?:test_|val_|eval_)?f1(?:_score)?(?:_.*)?$/i },
+    { label: 'roc_auc', match: /^(?:test_|val_|eval_)?roc_auc(?:_score)?(?:_.*)?$|^auc$/i },
+  ];
+
   topMetric(r: MlflowRunWithProject): string {
     const metrics = r.data?.metrics || [];
     if (metrics.length === 0) return '—';
-    const priority = ['accuracy', 'f1_score', 'roc_auc', 'r2_score', 'rmse'];
-    for (const k of priority) {
-      const m = metrics.find((x) => x.key === k);
-      if (m) return `${m.key}=${m.value.toFixed(4)}`;
+    for (const spec of this.headlineSpecs) {
+      const candidates = metrics.filter((m) => spec.match.test(m.key));
+      if (candidates.length > 0) {
+        candidates.sort((a, b) => a.key.length - b.key.length);
+        return `${spec.label}=${candidates[0].value.toFixed(4)}`;
+      }
     }
-    const m = metrics[0];
+    // Regression/fallback: prefer any non-training metric over training_* noise.
+    const m = metrics.find((x) => !/^train(ing)?_/i.test(x.key)) || metrics[0];
     return `${m.key}=${m.value.toFixed(4)}`;
   }
 }

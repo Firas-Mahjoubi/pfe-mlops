@@ -2137,6 +2137,17 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
     return this.runs.find(r => r.info.run_id === v.run_id) || null;
   }
 
+  // Shortest key matching a headline spec inside a plain metrics record.
+  private bestHeadlineFromRecord(
+    all: Record<string, number>,
+    spec: { match: RegExp },
+  ): { key: string; value: number } | null {
+    const keys = Object.keys(all).filter((k) => spec.match.test(k));
+    if (keys.length === 0) return null;
+    keys.sort((a, b) => a.length - b.length);
+    return { key: keys[0], value: all[keys[0]] };
+  }
+
   championMetric(): { label: string; value: string; sub: string } {
     const v = this.championVersion();
     const metrics = v?.metrics || {};
@@ -2146,16 +2157,22 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
       for (const m of fromRun.data.metrics || []) runMetrics[m.key] = m.value;
     }
     const all = { ...runMetrics, ...metrics };
-    const priority = ['f1_score', 'accuracy', 'roc_auc', 'r2_score'];
-    for (const k of priority) {
-      if (k in all) {
-        const label = k === 'f1_score' ? 'F1 Score' : k === 'accuracy' ? 'Accuracy' : k === 'roc_auc' ? 'ROC-AUC' : 'R² Score';
-        return { label, value: all[k].toFixed(3), sub: 'from best run' };
+    // Eval headline metrics first (any dataset-name suffix), never training_*.
+    for (const label of ['F1', 'Accuracy', 'ROC-AUC']) {
+      const spec = this.HEADLINE.find((h) => h.label === label)!;
+      const hit = this.bestHeadlineFromRecord(all, spec);
+      if (hit) {
+        return {
+          label: label === 'F1' ? 'F1 Score' : label,
+          value: hit.value.toFixed(3),
+          sub: 'from best run',
+        };
       }
     }
     const keys = Object.keys(all);
     if (keys.length === 0) return { label: 'Metric', value: '—', sub: 'no metrics logged' };
-    const k = keys[0];
+    // Regression/fallback: prefer any non-training metric over training_* noise.
+    const k = keys.find((x) => !/^train(ing)?_/i.test(x)) || keys[0];
     return { label: k, value: all[k].toFixed(3), sub: 'from best run' };
   }
 
@@ -2185,15 +2202,11 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
   }
 
   topRunMetric(r: MlflowRun): string {
-    const metrics = r.data?.metrics || [];
-    if (metrics.length === 0) return '—';
-    const priority = ['accuracy', 'f1_score', 'roc_auc', 'r2_score'];
-    for (const k of priority) {
-      const m = metrics.find(x => x.key === k);
-      if (m) return `${k}: ${m.value.toFixed(3)}`;
-    }
-    const m = metrics[0];
-    return `${m.key}: ${m.value.toFixed(3)}`;
+    // headlineMetrics resolves eval Accuracy/F1/ROC-AUC (any suffix) and only
+    // falls back to a non-training raw metric when nothing curated exists.
+    const hm = this.headlineMetrics(r);
+    if (hm.length === 0) return '—';
+    return `${hm[0].label}: ${hm[0].value.toFixed(3)}`;
   }
 
   timeAgo(iso: string | Date | null | undefined): string {
@@ -3291,12 +3304,19 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
 
   getModelMetrics(metrics?: Record<string, number>): { key: string; value: number }[] {
     if (!metrics) return [];
-    const priority = ['accuracy', 'f1_score', 'f1', 'roc_auc', 'r2_score', 'rmse'];
+    // Eval headline metrics (any dataset-name suffix) shown as clean chips.
+    const out: { key: string; value: number }[] = [];
+    for (const spec of this.HEADLINE) {
+      const hit = this.bestHeadlineFromRecord(metrics, spec);
+      if (hit) out.push({ key: spec.label, value: hit.value });
+    }
+    if (out.length > 0) return out.slice(0, 3);
+    // Regression/fallback: non-training metrics before training_* noise.
     const keys = [
-      ...priority.filter(k => k in metrics),
-      ...Object.keys(metrics).filter(k => !priority.includes(k)),
+      ...Object.keys(metrics).filter(k => !/^train(ing)?_/i.test(k)),
+      ...Object.keys(metrics).filter(k => /^train(ing)?_/i.test(k)),
     ].slice(0, 3);
-    return keys.map(k => ({ key: k.replace('_score', '').replace('_', ' '), value: metrics[k] }));
+    return keys.map(k => ({ key: k.replace('_score', '').replace(/_/g, ' '), value: metrics[k] }));
   }
 
   getStageClass(stage: string): string {

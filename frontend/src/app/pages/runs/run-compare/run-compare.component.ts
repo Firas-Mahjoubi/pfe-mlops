@@ -252,11 +252,14 @@ export class RunCompareComponent implements OnInit {
     { bg: 'rgba(248,113,113,0.75)', border: 'rgba(248,113,113,1)', solid: '#F87171' },
   ];
 
-  // The only metrics surfaced by default: eval keys preferred, training_* hidden.
-  private readonly HEADLINE: { label: string; keys: string[] }[] = [
-    { label: 'Accuracy', keys: ['accuracy', 'accuracy_score', 'accuracy_score_X_test', 'test_accuracy', 'val_accuracy'] },
-    { label: 'F1', keys: ['f1_score', 'f1', 'f1_score_X_test', 'test_f1_score', 'val_f1'] },
-    { label: 'ROC-AUC', keys: ['roc_auc', 'roc_auc_score', 'roc_auc_X_test', 'auc'] },
+  // The only metrics surfaced by default, matched by pattern: MLflow names
+  // post-training metrics `<metric>_<dataset-var>` (accuracy_score_X_test,
+  // f1_score_unknown_dataset, ...), so exact alias lists miss variants. The
+  // ^-anchored patterns accept any suffix while training_* can never match.
+  private readonly HEADLINE: { label: string; match: RegExp }[] = [
+    { label: 'Accuracy', match: /^(?:test_|val_|eval_)?accuracy(?:_score)?(?:_.*)?$/i },
+    { label: 'F1', match: /^(?:test_|val_|eval_)?f1(?:_score)?(?:_.*)?$/i },
+    { label: 'ROC-AUC', match: /^(?:test_|val_|eval_)?roc_auc(?:_score)?(?:_.*)?$|^auc$/i },
   ];
 
   // Meaningful sklearn hyperparameters, matched after stripping the estimator
@@ -283,12 +286,15 @@ export class RunCompareComponent implements OnInit {
   }
 
   // The logged metric keys that match a headline metric (preserves raw keys so
-  // isBest/formatDelta keep working). Falls back to all keys if none match.
+  // isBest/formatDelta keep working). Shortest matching key wins per spec;
+  // falls back to all keys if none match.
   headlineMetricKeys(): string[] {
     const out: string[] = [];
     for (const spec of this.HEADLINE) {
-      for (const k of spec.keys) {
-        if (this.allMetricKeys.includes(k)) { out.push(k); break; }
+      const candidates = this.allMetricKeys.filter((k) => spec.match.test(k));
+      if (candidates.length > 0) {
+        candidates.sort((a, b) => a.length - b.length);
+        out.push(candidates[0]);
       }
     }
     return out.length > 0 ? out : this.allMetricKeys;
@@ -300,7 +306,11 @@ export class RunCompareComponent implements OnInit {
   }
 
   metricRowLabel(key: string): string {
-    const spec = this.HEADLINE.find((h) => h.keys.includes(key));
+    // Clean label only for the curated headline rows; in "all metrics" mode the
+    // raw key is shown so sibling variants (accuracy, accuracy_score_X_test, …)
+    // stay distinguishable.
+    if (!this.headlineMetricKeys().includes(key)) return key;
+    const spec = this.HEADLINE.find((h) => h.match.test(key));
     return spec ? spec.label : key;
   }
 

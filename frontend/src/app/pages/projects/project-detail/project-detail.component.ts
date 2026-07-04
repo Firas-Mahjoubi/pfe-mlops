@@ -2296,12 +2296,15 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
   // ── Experiment grouping & ranking ─────────────────────────────────────────
   // Metrics we rank models by, best-first. Mirrors championMetric/topRunMetric.
   private readonly primaryMetricPriority = ['f1_score', 'accuracy', 'roc_auc', 'r2_score'];
-  // The only metrics surfaced on the Experiments tab. Each spec lists the keys
-  // we accept (eval/test first), so autolog's noisy training_* keys are hidden.
-  private readonly HEADLINE: { label: string; keys: string[] }[] = [
-    { label: 'Accuracy', keys: ['accuracy', 'accuracy_score', 'accuracy_score_X_test', 'test_accuracy', 'val_accuracy'] },
-    { label: 'F1', keys: ['f1_score', 'f1', 'f1_score_X_test', 'test_f1_score', 'val_f1'] },
-    { label: 'ROC-AUC', keys: ['roc_auc', 'roc_auc_score', 'roc_auc_X_test', 'auc'] },
+  // The only metrics surfaced on the Experiments tab, matched by pattern:
+  // MLflow post-training metrics are named `<metric>_<dataset-var>` (e.g.
+  // accuracy_score_X_test, f1_score_unknown_dataset), so exact alias lists miss
+  // variants and the ranking silently fell back to inflated training_* keys.
+  // The ^-anchored patterns accept any suffix while training_* can never match.
+  private readonly HEADLINE: { label: string; match: RegExp }[] = [
+    { label: 'Accuracy', match: /^(?:test_|val_|eval_)?accuracy(?:_score)?(?:_.*)?$/i },
+    { label: 'F1', match: /^(?:test_|val_|eval_)?f1(?:_score)?(?:_.*)?$/i },
+    { label: 'ROC-AUC', match: /^(?:test_|val_|eval_)?roc_auc(?:_score)?(?:_.*)?$|^auc$/i },
   ];
 
   // The curated headline metrics for a run (Accuracy / F1 / ROC-AUC). Falls back
@@ -2311,10 +2314,8 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
     if (metrics.length === 0) return [];
     const out: { label: string; value: number }[] = [];
     for (const spec of this.HEADLINE) {
-      for (const k of spec.keys) {
-        const m = metrics.find((x) => x.key === k);
-        if (m) { out.push({ label: spec.label, value: m.value }); break; }
-      }
+      const m = this.bestHeadlineMatch(metrics, spec);
+      if (m) out.push({ label: spec.label, value: m.value });
     }
     if (out.length > 0) return out;
     // Fallback: a non-training metric if possible, else the very first.
@@ -2322,14 +2323,21 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
     return [{ label: fallback.key, value: fallback.value }];
   }
 
+  // Shortest matching key wins: prefers the clean `accuracy` over suffixed
+  // variants when a run logged several flavors of the same metric.
+  private bestHeadlineMatch(
+    metrics: { key: string; value: number }[],
+    spec: { match: RegExp },
+  ): { key: string; value: number } | null {
+    const candidates = metrics.filter((m) => spec.match.test(m.key));
+    if (candidates.length === 0) return null;
+    candidates.sort((a, b) => a.key.length - b.key.length);
+    return candidates[0];
+  }
+
   // Best value of a headline metric within a run (used by ranking + chart).
-  private headlineValue(run: MlflowRun, spec: { keys: string[] }): number | null {
-    const metrics = run.data?.metrics || [];
-    for (const k of spec.keys) {
-      const m = metrics.find((x) => x.key === k);
-      if (m) return m.value;
-    }
-    return null;
+  private headlineValue(run: MlflowRun, spec: { match: RegExp }): number | null {
+    return this.bestHeadlineMatch(run.data?.metrics || [], spec)?.value ?? null;
   }
   // Known algorithm names we recognise inside a run name / params.
   private readonly modelKeywords: { match: RegExp; label: string }[] = [
@@ -2582,7 +2590,7 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
       ranked.some((g) => g.runs.some((r) => this.headlineValue(r, spec) !== null))
     );
     // Best (max) value of a headline metric within a model group.
-    const bestOf = (g: ExperimentGroup, spec: { keys: string[] }): number => {
+    const bestOf = (g: ExperimentGroup, spec: { match: RegExp }): number => {
       let best = 0;
       let found = false;
       for (const r of g.runs) {

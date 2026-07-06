@@ -1,8 +1,39 @@
+import mimetypes
+from urllib.parse import urlparse
+
+import boto3
 import httpx
 
 from app.config import settings
 
 MLFLOW_URL = settings.MLFLOW_TRACKING_URI
+
+_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".bmp"}
+
+
+def _s3_client():
+    """boto3 client pointed at the platform's MinIO (same store MLflow writes to)."""
+    scheme = "https" if settings.MINIO_SECURE else "http"
+    return boto3.client(
+        "s3",
+        endpoint_url=f"{scheme}://{settings.MINIO_ENDPOINT}",
+        aws_access_key_id=settings.MINIO_ACCESS_KEY,
+        aws_secret_access_key=settings.MINIO_SECRET_KEY,
+        region_name="us-east-1",
+    )
+
+
+def _parse_s3_uri(uri: str) -> tuple[str, str]:
+    """`s3://bucket/some/key` -> ("bucket", "some/key")."""
+    parsed = urlparse(uri)
+    if parsed.scheme != "s3":
+        raise ValueError(f"Unsupported artifact URI scheme: {uri}")
+    return parsed.netloc, parsed.path.lstrip("/")
+
+
+def _is_image(name: str) -> bool:
+    dot = name.rfind(".")
+    return dot != -1 and name[dot:].lower() in _IMAGE_EXTS
 
 
 async def create_experiment(name: str) -> str:
@@ -177,3 +208,76 @@ async def delete_experiment(experiment_id: str) -> None:
             json={"experiment_id": experiment_id},
         )
         resp.raise_for_status()
+
+
+async def list_artifacts(run_id: str, path: str = "") -> dict:
+    """List a run's logged artifacts directly from the MinIO store.
+
+    Returns ``{"experiment_id", "path", "files": [...]}`` where each file is
+    ``{name, rel_path, is_dir, size, is_image}``. ``path`` is a run-relative
+    sub-directory (e.g. ``"model"``); the artifact root is ``path == ""``.
+    """
+    import asyncio
+
+    run = await get_run(run_id)
+    experiment_id = run["info"].get("experiment_id")
+    artifact_uri = run["info"].get("artifact_uri")
+    if not artifact_uri:
+        return {"experiment_id": experiment_id, "path": path, "files": []}
+
+    bucket, root_prefix = _parse_s3_uri(artifact_uri)
+    sub = path.strip("/")
+    prefix = f"{root_prefix.rstrip('/')}/" + (f"{sub}/" if sub else "")
+
+    def _list() -> list[dict]:
+        s3 = _s3_client()
+        paginator = s3.get_paginator("list_objects_v2")
+        entries: list[dict] = []
+        for page in paginator.paginate(Bucket=bucket, Prefix=prefix, Delimiter="/"):
+            for cp in page.get("CommonPrefixes", []):
+                name = cp["Prefix"][len(prefix):].rstrip("/")
+                if not name:
+                    continue
+                entries.append({
+                    "name": name,
+                    "rel_path": (f"{sub}/{name}" if sub else name),
+                    "is_dir": True, "size": 0, "is_image": False,
+                })
+            for obj in page.get("Contents", []):
+                name = obj["Key"][len(prefix):]
+                if not name or name.endswith("/"):
+                    continue
+                entries.append({
+                    "name": name,
+                    "rel_path": (f"{sub}/{name}" if sub else name),
+                    "is_dir": False, "size": int(obj.get("Size", 0)),
+                    "is_image": _is_image(name),
+                })
+        entries.sort(key=lambda e: (not e["is_dir"], e["name"].lower()))
+        return entries
+
+    files = await asyncio.to_thread(_list)
+    return {"experiment_id": experiment_id, "path": path, "files": files}
+
+
+async def get_artifact_object(run_id: str, rel_path: str) -> tuple[bytes, str, str]:
+    """Fetch one artifact's bytes. Returns ``(data, content_type, experiment_id)``."""
+    import asyncio
+
+    run = await get_run(run_id)
+    experiment_id = run["info"].get("experiment_id")
+    artifact_uri = run["info"].get("artifact_uri")
+    if not artifact_uri:
+        raise FileNotFoundError("Run has no artifact_uri")
+
+    bucket, root_prefix = _parse_s3_uri(artifact_uri)
+    key = f"{root_prefix.rstrip('/')}/{rel_path.lstrip('/')}"
+
+    def _get() -> bytes:
+        s3 = _s3_client()
+        obj = s3.get_object(Bucket=bucket, Key=key)
+        return obj["Body"].read()
+
+    data = await asyncio.to_thread(_get)
+    content_type = mimetypes.guess_type(rel_path)[0] or "application/octet-stream"
+    return data, content_type, experiment_id

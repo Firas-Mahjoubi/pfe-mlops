@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>End-to-End MLOps Platform — Soutenance</title>
+  <link rel="stylesheet" href="reveal/reset.css">
+  <link rel="stylesheet" href="reveal/reveal.css">
+  <style>
+    /* ─── Design system: matches the platform UI ─────────────────────────── */
+    :root {
+      --bg: #0b1220;
+      --bg2: #0e1628;
+      --card: #101b30;
+      --line: rgba(122,138,153,0.22);
+      --ink: #e8f0f8;
+      --ink2: #a8bacb;
+      --ink3: #7a8a99;
+      --cyan: #42C2FF;
+      --violet: #8B5CF6;
+      --amber: #F59E0B;
+      --good: #34D399;
+      --bad: #F87171;
+      --r-main-font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    }
+    .reveal-viewport { background: radial-gradient(1200px 700px at 75% -10%, #12203a 0%, var(--bg) 55%); }
+    .reveal { font-family: var(--r-main-font); font-size: 30px; color: var(--ink); }
+    .reveal .slides section { text-align: left; }
+    .reveal h1, .reveal h2, .reveal h3 { font-family: var(--r-main-font); text-transform: none; letter-spacing: -0.5px; }
+    .reveal h1 { font-size: 1.9em; font-weight: 750; color: var(--ink); }
+    .reveal h2 { font-size: 1.25em; font-weight: 700; color: var(--ink); margin-bottom: 0.55em; }
+    .reveal h2 .acc { color: var(--cyan); }
+    .reveal p, .reveal li { color: var(--ink2); line-height: 1.45; }
+    .reveal .small { font-size: 0.62em; color: var(--ink3); }
+    .reveal strong { color: var(--ink); }
+    .reveal em { color: var(--cyan); font-style: normal; }
+
+    /* brand strip */
+    .brand { position: fixed; top: 18px; left: 26px; display: flex; align-items: center; gap: 10px;
+             font-size: 15px; font-weight: 700; letter-spacing: 2.5px; color: var(--ink3); z-index: 30; }
+    .brand .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 12px var(--cyan); }
+
+    /* generic cards / chips */
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; }
+    .card h3 { font-size: 0.72em; font-weight: 700; margin: 0 0 6px; }
+    .card p { font-size: 0.6em; margin: 0; color: var(--ink2); }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+    .pill { display: inline-block; padding: 3px 13px; border-radius: 999px; font-size: 0.5em; font-weight: 600;
+            border: 1px solid var(--line); color: var(--ink2); }
+    .pill.cyan { border-color: rgba(66,194,255,.45); color: var(--cyan); background: rgba(66,194,255,.08); }
+    .pill.good { border-color: rgba(52,211,153,.45); color: var(--good); background: rgba(52,211,153,.08); }
+
+    /* screenshots */
+    .shot { border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 18px 50px rgba(0,0,0,.5);
+            max-width: 100%; }
+    .shotrow { display: flex; gap: 16px; align-items: flex-start; }
+    .shotrow img { min-width: 0; }
+    .caption { font-size: 0.5em; color: var(--ink3); margin-top: 8px; }
+
+    /* checklist */
+    ul.checks { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 12px 26px; }
+    ul.checks li { font-size: 0.72em; padding-left: 38px; position: relative; }
+    ul.checks li::before { content: "✓"; position: absolute; left: 0; top: -2px; width: 26px; height: 26px;
+      border-radius: 50%; background: rgba(52,211,153,.14); color: var(--good); font-weight: 800;
+      display: flex; align-items: center; justify-content: center; font-size: 0.85em; }
+
+    /* comparison / BO-DSO tables */
+    table.cmp { width: 100%; border-collapse: collapse; font-size: 0.55em; }
+    table.cmp th { text-align: left; color: var(--ink3); font-weight: 700; text-transform: uppercase;
+      letter-spacing: 1px; font-size: 0.85em; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+    table.cmp td { padding: 12px 14px; border-bottom: 1px solid rgba(122,138,153,0.12); color: var(--ink2); vertical-align: top; }
+    table.cmp tr.hl td { background: rgba(66,194,255,.07); color: var(--ink); }
+    table.cmp td:first-child { color: var(--ink); font-weight: 600; white-space: nowrap; }
+
+    /* problem box */
+    .problem { border: 1px solid rgba(66,194,255,.4); background: rgba(66,194,255,.06); border-radius: 14px;
+      padding: 24px 28px; font-size: 0.85em; font-weight: 600; color: var(--ink); text-align: center; }
+
+    /* lifecycle ring */
+    .ring { position: relative; width: 640px; height: 480px; margin: 10px auto 0; }
+    .ring .center { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+      text-align: center; color: var(--cyan); font-size: 0.62em; font-weight: 700; line-height: 1.3; }
+    .ring .orbit { position: absolute; left: 50%; top: 50%; width: 470px; height: 350px;
+      transform: translate(-50%,-50%); border: 2px dashed rgba(66,194,255,.25); border-radius: 50%; }
+    .ring .node { position: absolute; width: 128px; padding: 10px 6px; text-align: center; border-radius: 12px;
+      background: rgba(66,194,255,.1); border: 1.5px solid rgba(66,194,255,.5); color: var(--ink);
+      font-size: 0.55em; font-weight: 700; transform: translate(-50%,-50%);
+      box-shadow: 0 8px 22px rgba(0,0,0,.35); }
+    .ring .node.alt { background: rgba(139,92,246,.12); border-color: rgba(139,92,246,.55); }
+    .ring .node.mon { background: rgba(245,158,11,.12); border-color: rgba(245,158,11,.6); }
+
+    /* flow diagrams (pipeline / deploy) */
+    .flow { display: flex; align-items: center; gap: 10px; justify-content: center; margin-top: 26px; }
+    .fnode { background: rgba(66,194,255,.09); border: 1.5px solid rgba(66,194,255,.5); border-radius: 12px;
+      padding: 13px 12px; text-align: center; font-size: 0.5em; font-weight: 700; color: var(--ink);
+      min-width: 118px; box-shadow: 0 8px 22px rgba(0,0,0,.35); line-height: 1.35; }
+    .fnode small { display: block; font-weight: 500; color: var(--ink3); font-size: 0.82em; margin-top: 2px; }
+    .fnode.teal { background: rgba(14,124,123,.14); border-color: rgba(45,212,191,.5); }
+    .fnode.store { background: rgba(245,158,11,.1); border-color: rgba(245,158,11,.55); }
+    .fnode.ok { background: rgba(52,211,153,.1); border-color: rgba(52,211,153,.55); }
+    .farrow { color: var(--cyan); font-size: 0.8em; font-weight: 800; }
+    .pod { border: 1.5px dashed rgba(66,194,255,.4); border-radius: 16px; padding: 20px 14px 12px; position: relative;
+      display: flex; gap: 10px; align-items: center; }
+    .pod::before { content: attr(data-label); position: absolute; top: -12px; left: 16px; font-size: 0.45em;
+      font-weight: 700; color: var(--cyan); background: var(--bg); padding: 0 8px; }
+
+    /* layered architecture */
+    .layers { display: grid; grid-template-columns: 1.25fr 0.9fr; gap: 26px; align-items: center; margin-top: 8px; }
+    .layer { background: rgba(66,194,255,.08); border: 1.5px solid rgba(66,194,255,.45); border-radius: 12px;
+      padding: 15px 20px; margin-bottom: 13px; font-size: 0.62em; font-weight: 700; color: var(--ink);
+      box-shadow: 0 8px 22px rgba(0,0,0,.3); }
+    .layer small { display: block; font-weight: 500; color: var(--ink2); font-size: 0.8em; margin-top: 2px; }
+    .larrow { text-align: center; color: var(--cyan); font-weight: 800; margin: -7px 0 6px; font-size: 0.6em; }
+    .sysbox { border: 1.5px dashed rgba(245,158,11,.5); border-radius: 16px; padding: 20px 16px 14px; position: relative; }
+    .sysbox::before { content: "CLUSTER SYSTEMS"; position: absolute; top: -11px; left: 16px; font-size: 0.42em;
+      font-weight: 700; letter-spacing: 1px; color: var(--amber); background: var(--bg); padding: 0 8px; }
+    .sysrow { display: flex; align-items: center; gap: 12px; background: rgba(245,158,11,.07);
+      border: 1px solid rgba(245,158,11,.35); border-radius: 10px; padding: 9px 14px; margin-bottom: 10px;
+      font-size: 0.55em; font-weight: 700; color: var(--ink); }
+    .sysrow img { height: 26px; width: auto; }
+
+    /* tech stack */
+    .tcol h3 { color: var(--cyan); font-size: 0.66em; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1.5px; }
+    .tcol.violet h3 { color: var(--violet); } .tcol.amberc h3 { color: var(--amber); }
+    .titem { display: flex; align-items: center; gap: 13px; background: var(--card); border: 1px solid var(--line);
+      border-radius: 11px; padding: 10px 15px; margin-bottom: 10px; font-size: 0.6em; font-weight: 650; color: var(--ink); }
+    .titem img { height: 30px; width: 44px; object-fit: contain; }
+
+    /* timeline */
+    .timeline { display: flex; align-items: stretch; gap: 12px; margin-top: 30px; }
+    .tl { flex: 1; background: var(--card); border: 1px solid var(--line); border-top: 4px solid var(--cyan);
+      border-radius: 12px; padding: 16px 16px; }
+    .tl:nth-child(2) { border-top-color: var(--violet); } .tl:nth-child(3) { border-top-color: var(--amber); }
+    .tl:nth-child(4) { border-top-color: var(--good); }
+    .tl .n { font-size: 0.5em; color: var(--ink3); font-weight: 700; letter-spacing: 1.5px; }
+    .tl .t { font-size: 0.62em; font-weight: 750; color: var(--ink); margin: 5px 0 6px; }
+    .tl .d { font-size: 0.5em; color: var(--ink2); }
+    .tl .dates { font-size: 0.45em; color: var(--ink3); margin-top: 8px; font-family: Consolas, monospace; }
+
+    /* metric tiles */
+    .mtiles { display: flex; gap: 18px; justify-content: center; margin: 24px 0; }
+    .mtile { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px 30px; text-align: center; }
+    .mtile .v { font-size: 1.25em; font-weight: 800; color: var(--cyan); }
+    .mtile.g .v { color: var(--good); } .mtile.a .v { color: var(--amber); }
+    .mtile .l { font-size: 0.5em; color: var(--ink3); margin-top: 4px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; }
+
+    /* code block */
+    pre.code { background: #0a0f1a; border: 1px solid var(--line); border-radius: 12px; padding: 18px 22px;
+      font-family: Consolas, 'Courier New', monospace; font-size: 0.5em; color: #c8d8e8; line-height: 1.55;
+      box-shadow: 0 12px 34px rgba(0,0,0,.4); overflow-x: auto; width: 100%; box-sizing: border-box; }
+    pre.code .c { color: var(--cyan); } pre.code .g { color: var(--good); } pre.code .m { color: var(--ink3); }
+    pre.code .rd { color: var(--bad); }
+
+    /* before/after conversion */
+    .ba { display: grid; grid-template-columns: 1fr 44px 1fr; gap: 8px; align-items: center; }
+    .ba .mid { text-align: center; color: var(--cyan); font-size: 1.15em; font-weight: 800; }
+
+    /* title slide */
+    .titleslide { text-align: center !important; }
+    .titleslide .logos { display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px; }
+    .titleslide .logos img { height: 52px; width: auto; }
+    .titleslide h1 { font-size: 1.72em; margin: 6px 0 14px; }
+    .titleslide .grad { background: linear-gradient(90deg, var(--cyan), var(--violet));
+      -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .titleslide .sub { color: var(--ink2); font-size: 0.78em; margin-bottom: 44px; }
+    .titleslide .who { display: flex; justify-content: center; gap: 70px; font-size: 0.58em; color: var(--ink2); }
+    .titleslide .who b { display: block; color: var(--ink3); font-weight: 700; text-transform: uppercase;
+      letter-spacing: 1.5px; font-size: 0.78em; margin-bottom: 5px; }
+    .rule { height: 3px; width: 220px; margin: 0 auto 26px; border-radius: 2px;
+      background: linear-gradient(90deg, var(--cyan), var(--violet)); }
+
+    /* agenda */
+    ol.agenda { columns: 2; column-gap: 60px; font-size: 0.72em; margin: 10px 0 0 24px; }
+    ol.agenda li { margin-bottom: 12px; padding-left: 6px; }
+    ol.agenda li::marker { color: var(--cyan); font-weight: 800; }
+
+    .reveal .progress { color: var(--cyan); }
+    .reveal .slide-number { background: transparent; color: var(--ink3); font-size: 16px; }
+    .imgpanel { text-align: center; }
+    .imgpanel img { max-height: 560px; width: auto; max-width: 100%; }
+    .white-bg { background: #fff; padding: 14px; border-radius: 12px; }
+    .demo-big { font-size: 3.2em; font-weight: 850; text-align: center;
+      background: linear-gradient(90deg, var(--cyan), var(--violet), var(--amber));
+      -webkit-background-clip: text; background-clip: text; color: transparent; letter-spacing: 4px; }
+  </style>
+</head>
+<body>
+<div class="brand"><span class="dot"></span>MLOPS&nbsp;PLATFORM</div>
+<div class="reveal">
+  <div class="slides">
+
+    <!-- 1 ─ TITLE -->
+    <section class="titleslide">
+      <div class="logos">
+        <img src="assets/esprit.png" alt="ESPRIT">
+        <img src="assets/insomea.png" alt="INSOMEA">
+      </div>
+      <div class="pill cyan">END-OF-STUDIES PROJECT · 2025 / 2026</div>
+      <h1>Design &amp; Implementation of an<br><span class="grad">End-to-End MLOps Platform</span></h1>
+      <div class="sub">Automated Model Training, Tracking &amp; Deployment on Kubernetes</div>
+      <div class="rule"></div>
+      <div class="who">
+        <div><b>Presented by</b>Firas Mahjoubi</div>
+        <div><b>Academic supervisor</b>Mr. Ben Mardes Achref</div>
+        <div><b>Company supervisor</b>Mr. Amine Gonji · INSOMEA</div>
+      </div>
+      <aside class="notes">Good morning. Today I present my end-of-studies project, carried out at INSOMEA: a complete MLOps platform that takes a model from a notebook to a live prediction service.</aside>
+    </section>
+
+    <!-- 2 ─ AGENDA -->
+    <section>
+      <h2>Agenda</h2>
+      <ol class="agenda">
+        <li class="fragment">Host company</li>
+        <li class="fragment">Project context</li>
+        <li class="fragment">Problem &amp; objectives</li>
+        <li class="fragment">State of the art</li>
+        <li class="fragment">Proposed solution</li>
+        <li class="fragment">Business &amp; system objectives</li>
+        <li class="fragment">Methodology</li>
+        <li class="fragment">Technology choices</li>
+        <li class="fragment">Architecture &amp; modeling</li>
+        <li class="fragment">The platform, sprint by sprint</li>
+        <li class="fragment">Case study &amp; live demo</li>
+        <li class="fragment">Conclusion &amp; perspectives</li>
+      </ol>
+      <aside class="notes">Quick roadmap: company, context and problem; then the solution, its architecture, the four sprints, a real case study, and the live demo.</aside>
+    </section>
+
+    <!-- 3 ─ HOST COMPANY -->
+    <section>
+      <h2>Host Company — <span class="acc">INSOMEA</span></h2>
+      <p class="small" style="margin-bottom:20px">Microsoft Cloud <strong>Gold Partner</strong> · Middle East &amp; Africa · 6 offices · 500+ customers · Microsoft <em>Partner of the Year</em> ×5</p>
+      <div class="grid3">
+        <div class="card fragment"><h3 style="color:var(--cyan)">Modern Workplace</h3><p>Collaboration &amp; productivity with Microsoft 365 and Teams — adoption &amp; change management.</p></div>
+        <div class="card fragment"><h3 style="color:var(--violet)">Security</h3><p>Identity &amp; access management, information protection, threat protection.</p></div>
+        <div class="card fragment"><h3 style="color:var(--amber)">Cloud &amp; Infrastructure</h3><p>Microsoft Azure, datacenter, <strong>DevOps</strong>, application development &amp; integration — where this project lives.</p></div>
+      </div>
+      <p class="small fragment" style="margin-top:22px">This PFE was conducted in the <strong>Cloud &amp; Infrastructure</strong> team over 6 months.</p>
+      <aside class="notes">INSOMEA is a Microsoft Gold Partner operating across MEA. Three pillars; my project belongs to Cloud & Infrastructure — building an MLOps stack on Azure.</aside>
+    </section>
+
+    <!-- 4 ─ CONTEXT -->
+    <section>
+      <h2>Project Context</h2>
+      <div class="card fragment" style="margin-bottom:14px; border-left:4px solid var(--cyan)">
+        <h3>Machine learning is stuck in notebooks</h3>
+        <p>Models are trained on laptops, results tracked in spreadsheets, deployment is manual and fragile — the classic "level 0" workflow.</p>
+      </div>
+      <div class="card fragment" style="margin-bottom:14px; border-left:4px solid var(--violet)">
+        <h3>Industrialize the full ML lifecycle</h3>
+        <p>One platform: upload code → train on a Kubernetes cluster → track every experiment → register, deploy &amp; consume models.</p>
+      </div>
+      <div class="card fragment" style="border-left:4px solid var(--amber)">
+        <h3>Deployed on real cloud infrastructure</h3>
+        <p>Runs in production on <strong>Azure Kubernetes Service</strong>, continuously delivered by CI/CD, publicly reachable behind Cloudflare.</p>
+      </div>
+      <aside class="notes">The gap between a model that works on a laptop and one that serves production traffic is the hardest problem in applied ML — that gap is exactly what the platform closes.</aside>
+    </section>
+
+    <!-- 5 ─ PROBLEM & OBJECTIVES -->
+    <section>
+      <h2>Problem &amp; Objectives</h2>
+      <div class="problem fragment">
+        How can a data scientist go from a <em>notebook</em> to a <em>live, consumable prediction service</em> —
+        without writing a single line of infrastructure code?
+      </div>
+      <p class="small" style="margin:24px 0 12px"><strong style="color:var(--ink)">Objectives of the PFE:</strong></p>
+      <ul class="checks">
+        <li class="fragment">Upload &amp; run any code on the cluster</li>
+        <li class="fragment">Track every experiment automatically</li>
+        <li class="fragment">Registry: version &amp; promote models</li>
+        <li class="fragment">One-click deployment as live services</li>
+        <li class="fragment">Public API for external applications</li>
+        <li class="fragment">Monitoring, diagnostics &amp; administration</li>
+      </ul>
+      <aside class="notes">One question drives everything. Six objectives: run, track, register, deploy, expose, operate. All six were delivered.</aside>
+    </section>
+
+    <!-- 6 ─ STATE OF THE ART -->
+    <section>
+      <h2>State of the Art</h2>
+      <table class="cmp">
+        <tr><th>Solution</th><th>Strengths</th><th>Limitations</th></tr>
+        <tr class="fragment"><td>SageMaker / Vertex AI / Azure ML</td><td>Full managed lifecycle</td><td>Vendor lock-in, recurring cost, hidden mechanics</td></tr>
+        <tr class="fragment"><td>Databricks</td><td>Strong data + training environment</td><td>Subscription; data-centric, not serving-centric</td></tr>
+        <tr class="fragment"><td>AIchor (InstaDeep)</td><td>Cluster training via GitOps</td><td>Stops at training — no registry, no serving, no public API; requires Git + Docker skills</td></tr>
+        <tr class="fragment"><td>Kubeflow (open source)</td><td>Powerful primitives</td><td>No product: no users, no projects, heavy integration work</td></tr>
+        <tr class="fragment hl"><td>This project</td><td colspan="2"><strong>Full lifecycle</strong> — training → tracking → registry → serving → public API — 100% open-source, self-hosted, <strong>browser-only</strong> for the user</td></tr>
+      </table>
+      <aside class="notes">Managed clouds are complete but locked and opaque. AIchor is the closest comparable but stops at training. Our platform covers the full loop, open source, and asks nothing from the user but a browser.</aside>
+    </section>
+
+    <!-- 7 ─ PROPOSED SOLUTION: LIFECYCLE RING -->
+    <section>
+      <h2>Proposed Solution — <span class="acc">the complete ML lifecycle, one platform</span></h2>
+      <div class="ring">
+        <div class="orbit"></div>
+        <div class="center">The end-to-end<br>MLOps lifecycle</div>
+        <div class="node fragment" style="left:50%; top:11%">Upload<br><small>code + data</small></div>
+        <div class="node fragment" style="left:76%; top:22%">Train<br><small>isolated pod</small></div>
+        <div class="node fragment" style="left:87%; top:50%">Track<br><small>autolog</small></div>
+        <div class="node alt fragment" style="left:76%; top:78%">Register<br><small>versions</small></div>
+        <div class="node alt fragment" style="left:50%; top:89%">Deploy<br><small>KServe</small></div>
+        <div class="node alt fragment" style="left:24%; top:78%">Serve<br><small>predictions</small></div>
+        <div class="node mon fragment" style="left:13%; top:50%">Consume<br><small>public API</small></div>
+        <div class="node mon fragment" style="left:24%; top:22%">Monitor<br><small>KPIs · telemetry</small></div>
+      </div>
+      <aside class="notes">Walk the ring stage by stage — this IS the demo path. Upload, train, track, register, deploy, serve, consume from outside, monitor. Every arrow is a platform feature, not a manual step.</aside>
+    </section>
+
+    <!-- 8 ─ BO & DSO -->
+    <section>
+      <h2>Business &amp; System Objectives</h2>
+      <table class="cmp">
+        <tr><th style="width:44%">Business objective</th><th>Delivered system capability</th></tr>
+        <tr class="fragment"><td>Train without owning infrastructure</td><td>Any <strong>.py / .ipynb / .zip</strong> runs in an isolated, resource-limited Kubernetes pod</td></tr>
+        <tr class="fragment"><td>Never lose an experiment</td><td><strong>MLflow autolog</strong> captures params, metrics &amp; artifacts of every run — zero code changes</td></tr>
+        <tr class="fragment"><td>Choose the best model objectively</td><td>Leaderboard groups runs <strong>by model family</strong>, ranked on evaluation metrics only</td></tr>
+        <tr class="fragment"><td>Ship a model like software</td><td>Registry versions + stages; <strong>one-click deployment</strong> as a KServe InferenceService</td></tr>
+        <tr class="fragment"><td>Let external apps consume models</td><td>Public endpoint secured by <strong>hashed API keys</strong> — no platform account needed</td></tr>
+        <tr class="fragment"><td>Operate &amp; trust the system</td><td>Model-evolution KPIs, serving telemetry, failure diagnostics, admin area</td></tr>
+      </table>
+      <aside class="notes">Each business need maps to a concrete shipped capability — this table is the contract the jury can check against the demo.</aside>
+    </section>
+
+    <!-- 9 ─ METHODOLOGY -->
+    <section>
+      <h2>Methodology — <span class="acc">Scrum, 4 sprints</span></h2>
+      <p class="small">6 months (12 Jan → 11 Jul 2026) · product backlog of 15 user stories · a demonstrable increment per sprint</p>
+      <div class="timeline">
+        <div class="tl fragment"><div class="n">SPRINT 1</div><div class="t">Foundation</div><div class="d">JWT auth, projects, one MLflow experiment per project</div><div class="dates">02 Feb → 01 Mar</div></div>
+        <div class="tl fragment"><div class="n">SPRINT 2</div><div class="t">Training &amp; Tracking</div><div class="d">Upload, pipeline on K8s, notebook conversion, live logs, autolog</div><div class="dates">02 Mar → 05 Apr</div></div>
+        <div class="tl fragment"><div class="n">SPRINT 3</div><div class="t">Registry &amp; Deployment</div><div class="d">Model versions &amp; stages, KServe serving, prediction tester</div><div class="dates">06 Apr → 03 May</div></div>
+        <div class="tl fragment"><div class="n">SPRINT 4</div><div class="t">Observability &amp; Public Serving</div><div class="d">Dashboards, public API keys, diagnostics, administration</div><div class="dates">04 May → 14 Jun</div></div>
+      </div>
+      <p class="small fragment" style="margin-top:20px">Product Owner: Mr. A. Gonji (INSOMEA) · Scrum Master: Mr. B. M. Achref · Dev team: the student</p>
+      <aside class="notes">Scrum with four vertical slices — each sprint ended with something running and reviewed. This order is deliberate: identity → training → serving → operations.</aside>
+    </section>
+
+    <!-- 10 ─ USE CASE DIAGRAM -->
+    <section>
+      <h2>Global Use Case Diagram</h2>
+      <div class="imgpanel"><img class="shot white-bg" src="assets/usecase_global.png" alt="Global use case diagram"></div>
+      <aside class="notes">Three human actors: the data scientist (whole lifecycle), the external API client (one authenticated HTTP call), and the administrator (accounts, oversight).</aside>
+    </section>
+
+    <!-- 11 ─ TECH STACK -->
+    <section>
+      <h2>Technology Choices</h2>
+      <div class="grid3">
+        <div class="tcol">
+          <h3>MLOps Core</h3>
+          <div class="titem fragment"><img src="assets/mlflow.png">MLflow — tracking &amp; registry</div>
+          <div class="titem fragment"><img src="assets/kserve.png">KServe — model serving</div>
+          <div class="titem fragment"><img src="assets/kubeflow.png">Kubeflow Pipelines + Argo</div>
+          <div class="titem fragment"><img src="assets/minio.png">MinIO — S3 object storage</div>
+        </div>
+        <div class="tcol violet">
+          <h3>Application</h3>
+          <div class="titem fragment"><img src="assets/angular.png">Angular 19 — frontend SPA</div>
+          <div class="titem fragment"><img src="assets/fastapi.png">FastAPI — async backend</div>
+          <div class="titem fragment"><img src="assets/postgresql.png">PostgreSQL — platform + MLflow</div>
+        </div>
+        <div class="tcol amberc">
+          <h3>Infrastructure</h3>
+          <div class="titem fragment"><img src="assets/kubernetes.png">Kubernetes — AKS / KinD</div>
+          <div class="titem fragment"><img src="assets/github_actions.png">GitHub Actions — CI/CD</div>
+          <div class="titem fragment"><img src="assets/acr.png">Azure Container Registry</div>
+          <div class="titem fragment"><img src="assets/cloudflare.png">Cloudflare Tunnel — secure edge</div>
+        </div>
+      </div>
+      <aside class="notes">Three families: the MLOps engines, the application around them, and the infrastructure. Everything open source; Azure is the ground it runs on.</aside>
+    </section>
+
+    <!-- 12 ─ LOGICAL ARCHITECTURE -->
+    <section>
+      <h2>Logical Architecture</h2>
+      <div class="layers">
+        <div>
+          <div class="layer fragment" data-fragment-index="1">Presentation — Angular SPA<small>dashboard · projects · experiments · deployments · admin</small></div>
+          <div class="larrow fragment" data-fragment-index="2">▼ REST / JWT</div>
+          <div class="layer fragment" data-fragment-index="2">API — FastAPI routers<small>validation · authentication · ownership checks</small></div>
+          <div class="larrow fragment" data-fragment-index="3">▼</div>
+          <div class="layer fragment" data-fragment-index="3">Service — business logic<small>pipeline submission · MLflow · KServe · storage orchestration</small></div>
+          <div class="larrow fragment" data-fragment-index="4">▼</div>
+          <div class="layer fragment" data-fragment-index="4">Data — SQLAlchemy / PostgreSQL<small>users · projects · runs · models · deployments · API keys · telemetry</small></div>
+        </div>
+        <div class="sysbox fragment" data-fragment-index="5">
+          <div class="sysrow"><img src="assets/mlflow.png">MLflow — experiments &amp; registry</div>
+          <div class="sysrow"><img src="assets/minio.png">MinIO — code, datasets, artifacts</div>
+          <div class="sysrow"><img src="assets/kserve.png">KServe — InferenceServices</div>
+          <div class="sysrow" style="margin-bottom:0"><img src="assets/kubeflow.png">KFP / Argo — training pods</div>
+        </div>
+      </div>
+      <aside class="notes">Classic layered backend — deliberately NOT microservices: the heavy concerns already live in dedicated cluster systems shown on the right; the service layer orchestrates them.</aside>
+    </section>
+
+    <!-- 13 ─ DEPLOYMENT ARCHITECTURE -->
+    <section>
+      <h2>Deployment Architecture</h2>
+      <div class="imgpanel"><img class="shot white-bg" src="assets/architecture.png" alt="Deployment architecture" style="max-height:520px"></div>
+      <p class="caption" style="text-align:center">browser → Cloudflare edge (TLS) → tunnel → frontend → backend → { PostgreSQL · MinIO · MLflow · KFP/Argo · KServe } — all on AKS</p>
+      <aside class="notes">Everything is containerized on AKS. No public IP is exposed: an outbound-only Cloudflare Tunnel fronts the cluster, TLS terminates at the edge, DDoS protection included.</aside>
+    </section>
+
+    <!-- 14 ─ SPRINT 1 -->
+    <section>
+      <h2><span class="pill cyan">SPRINT 1</span> &nbsp;Foundation — <span class="acc">identity &amp; projects</span></h2>
+      <div class="shotrow" style="margin-top:18px">
+        <div style="flex:1.15"><img class="shot fragment" src="assets/screen_login.png" alt="Login"><div class="caption">Stateless JWT auth — access + refresh tokens, bcrypt hashing</div></div>
+        <div style="flex:1.15"><img class="shot fragment" src="assets/screen_projects.png" alt="Projects"><div class="caption">Projects — each bound to its own MLflow experiment; strict ownership (404 for foreign resources)</div></div>
+      </div>
+      <aside class="notes">Sprint 1 delivers identity and the project as organizing unit. Creating a project provisions its MLflow experiment — that binding powers everything later.</aside>
+    </section>
+
+    <!-- 15 ─ SPRINT 2: PIPELINE -->
+    <section>
+      <h2><span class="pill cyan">SPRINT 2</span> &nbsp;Training &amp; Tracking — <span class="acc">the engine</span></h2>
+      <div class="flow">
+        <div class="fnode fragment" data-fragment-index="1">Trigger<br><small>Run code</small></div>
+        <div class="farrow fragment" data-fragment-index="2">→</div>
+        <div class="pod" data-label="ISOLATED POD — KUBERNETES">
+          <div class="fnode teal fragment" data-fragment-index="2">Download<br><small>code + data</small></div>
+          <div class="farrow fragment" data-fragment-index="3">→</div>
+          <div class="fnode teal fragment" data-fragment-index="3">Install<br><small>dependencies</small></div>
+          <div class="farrow fragment" data-fragment-index="4">→</div>
+          <div class="fnode teal fragment" data-fragment-index="4">Autolog<br><small>runner wraps script</small></div>
+          <div class="farrow fragment" data-fragment-index="5">→</div>
+          <div class="fnode teal fragment" data-fragment-index="5">Execute<br><small>auto-retry deps</small></div>
+        </div>
+        <div class="farrow fragment" data-fragment-index="6">→</div>
+        <div class="fnode store fragment" data-fragment-index="6">MLflow<br><small>metrics · params · model</small></div>
+      </div>
+      <div class="shotrow" style="margin-top:26px">
+        <div style="flex:1"><img class="shot fragment" src="assets/screen_logs.png" alt="Live logs" data-fragment-index="7"><div class="caption">Live pod logs streamed to the browser during the run</div></div>
+      </div>
+      <aside class="notes">A run is a small pipeline in an isolated pod: download, install, wrap with the autolog runner, execute with automatic dependency retries. The user watches live logs; MLflow captures everything with zero code changes.</aside>
+    </section>
+
+    <!-- 16 ─ NOTEBOOK CONVERSION -->
+    <section>
+      <h2>Signature Feature — <span class="acc">notebook → script conversion</span></h2>
+      <p class="small" style="margin-bottom:14px">Real-world notebooks are full of Jupyter-only constructs. The platform converts them to clean scripts <strong>at upload time</strong>, using IPython's own transformer — not fragile regexes.</p>
+      <div class="ba">
+        <pre class="code fragment"><span class="m"># messy Colab notebook</span>
+<span class="rd">!pip install</span> xgboost
+<span class="rd">%matplotlib</span> inline
+<span class="rd">%%time</span>
+model.fit(X_train, y_train)
+files = <span class="rd">!ls</span></pre>
+        <div class="mid fragment">→</div>
+        <pre class="code fragment"><span class="m"># clean runnable script</span>
+<span class="g">subprocess.check_call([sys.executable,
+  '-m','pip','install','xgboost'])</span>
+<span class="m"># magic removed — code kept:</span>
+model.fit(X_train, y_train)
+files = <span class="g">subprocess.run('ls', ...)</span></pre>
+      </div>
+      <ul class="checks" style="margin-top:20px">
+        <li class="fragment">String-safe — magics inside strings untouched</li>
+        <li class="fragment"><code>!pip install</code> preserved as real installs</li>
+        <li class="fragment"><code>%%time</code> body kept — training never lost</li>
+        <li class="fragment">Output guaranteed to compile, or safe fallback</li>
+      </ul>
+      <aside class="notes">This is the feature that makes "upload any notebook" true. Cells that already parse are untouched; magic cells go through IPython's canonical transformer, then get rewritten into portable Python. Warnings surface instantly in the UI.</aside>
+    </section>
+
+    <!-- 17 ─ EXPERIMENTS INTELLIGENCE -->
+    <section>
+      <h2>Experiments Intelligence</h2>
+      <div class="imgpanel"><img class="shot" src="assets/screen_experiments.png" alt="Experiments leaderboard" style="max-height:460px"></div>
+      <ul class="checks" style="margin-top:16px">
+        <li class="fragment">Runs grouped by <strong>model family</strong> (autolog tags)</li>
+        <li class="fragment">Ranked on <strong>evaluation metrics only</strong> — never training scores</li>
+        <li class="fragment">Champion banner + star ratings</li>
+        <li class="fragment">Register any run as a model version, in one click</li>
+      </ul>
+      <aside class="notes">One notebook execution can produce many runs — the leaderboard buckets them per algorithm and crowns a champion using eval metrics only, so overfit training scores can't cheat. From here, one click registers the best run.</aside>
+    </section>
+
+    <!-- 18 ─ SPRINT 3: DEPLOY FLOW -->
+    <section>
+      <h2><span class="pill cyan">SPRINT 3</span> &nbsp;Registry &amp; Deployment</h2>
+      <div class="flow">
+        <div class="fnode fragment" data-fragment-index="1">Register<br><small>model version</small></div>
+        <div class="farrow fragment" data-fragment-index="2">→</div>
+        <div class="fnode fragment" data-fragment-index="2">InferenceService<br><small>one K8s resource</small></div>
+        <div class="farrow fragment" data-fragment-index="3">→</div>
+        <div class="fnode teal fragment" data-fragment-index="3">KServe operator<br><small>reconciles</small></div>
+        <div class="farrow fragment" data-fragment-index="4">→</div>
+        <div class="fnode teal fragment" data-fragment-index="4">Deployment<br>Service · Ingress</div>
+        <div class="farrow fragment" data-fragment-index="5">→</div>
+        <div class="fnode store fragment" data-fragment-index="5">Model server<br><small>loads from MinIO</small></div>
+        <div class="farrow fragment" data-fragment-index="6">→</div>
+        <div class="fnode ok fragment" data-fragment-index="6">READY<br><small>predict!</small></div>
+      </div>
+      <div class="shotrow" style="margin-top:24px">
+        <div style="flex:1"><img class="shot fragment" src="assets/screen_registry.png" alt="Registry" data-fragment-index="7"><div class="caption">Registry — versions &amp; lifecycle stages (Staging / Production / Archived)</div></div>
+        <div style="flex:1"><img class="shot fragment" src="assets/screen_deploy.png" alt="Deploy" data-fragment-index="8"><div class="caption">Deployment panel — status progress &amp; endpoint</div></div>
+      </div>
+      <aside class="notes">Deployment is declarative: the platform creates ONE Kubernetes resource, the KServe operator does the rest — deployment, service, ingress, model download. The UI tracks it to READY.</aside>
+    </section>
+
+    <!-- 19 ─ PREDICTION & PUBLIC API -->
+    <section>
+      <h2>Prediction &amp; <span class="acc">Public API</span></h2>
+      <div class="shotrow">
+        <div style="flex:1.3">
+          <img class="shot fragment" src="assets/screen_predict.png" alt="Prediction tester" style="max-height:330px">
+          <div class="caption">In-platform prediction tester</div>
+        </div>
+        <div style="flex:1">
+          <pre class="code fragment">curl -X POST <span class="c">https://mlops.firasmahjoubi.app</span>
+  <span class="c">/api/public/predict/&lt;deployment&gt;</span>
+  -H <span class="g">"Authorization: Bearer mlops_****"</span>
+  -H "Content-Type: application/json"
+  -d <span class="g">'{"instances": [[17.9, 10.3, ...]]}'</span>
+
+<span class="m">→ {"predictions": [0]}   # 45 ms</span></pre>
+          <ul class="checks" style="grid-template-columns:1fr; margin-top:14px">
+            <li class="fragment">Per-deployment API keys — <strong>SHA-256 hashed</strong>, shown once</li>
+            <li class="fragment">Any website / app can consume the model — no account</li>
+            <li class="fragment">Ready-to-paste cURL / JS / Python snippets generated</li>
+          </ul>
+        </div>
+      </div>
+      <aside class="notes">Deployed models are consumable from outside through a key-authenticated public endpoint. Keys are stored hashed, revocable, and the UI generates the integration snippets.</aside>
+    </section>
+
+    <!-- 20 ─ SPRINT 4 -->
+    <section>
+      <h2><span class="pill cyan">SPRINT 4</span> &nbsp;Observability &amp; Administration</h2>
+      <div class="shotrow" style="margin-top:14px">
+        <div style="flex:1"><img class="shot fragment" src="assets/screen_dashboard.png" alt="Dashboard"><div class="caption">Live cluster &amp; per-pod metrics</div></div>
+        <div style="flex:1"><img class="shot fragment" src="assets/screen_admin.png" alt="Admin"><div class="caption">Administration — users, roles, platform oversight</div></div>
+      </div>
+      <div class="shotrow" style="margin-top:14px">
+        <div style="flex:1"><img class="shot fragment" src="assets/screen_diagnostics.png" alt="Diagnostics"><div class="caption">Failure diagnostics — "why did my run fail?" in one glance</div></div>
+        <div style="flex:1" class="fragment">
+          <div class="card" style="height:100%; box-sizing:border-box">
+            <h3 style="color:var(--cyan)">+ Per-project Monitoring</h3>
+            <p>Model <strong>evolution over time</strong> per family · health verdict (improving / degrading) · version-to-version deltas · <strong>serving telemetry</strong>: request volume, latency p95, error rate — from real prediction logs.</p>
+          </div>
+        </div>
+      </div>
+      <aside class="notes">Sprint 4 makes the platform operable: metrics dashboards, admin area, self-explaining failures, and per-project monitoring — is my model getting better or worse, and how is it behaving in production?</aside>
+    </section>
+
+    <!-- 21 ─ CASE STUDY -->
+    <section>
+      <h2>Case Study — <span class="acc">telecom churn, end to end</span></h2>
+      <p class="small">A real churn model (XGBoost + SMOTE, built from 2 Excel sources) uploaded as a notebook zip — the platform did the rest.</p>
+      <div class="mtiles">
+        <div class="mtile fragment"><div class="v">6</div><div class="l">tracked runs<br>from 1 upload</div></div>
+        <div class="mtile g fragment"><div class="v">0.91</div><div class="l">ROC-AUC<br>test set</div></div>
+        <div class="mtile g fragment"><div class="v">0.85</div><div class="l">F1 score<br>churn class</div></div>
+        <div class="mtile a fragment"><div class="v">96%</div><div class="l">churn captured in<br>high-risk segment</div></div>
+      </div>
+      <ul class="checks">
+        <li class="fragment">Notebook auto-converted (pip installs preserved)</li>
+        <li class="fragment">3 model families ranked on the leaderboard</li>
+        <li class="fragment">Champion registered → deployed → public API</li>
+        <li class="fragment">Monitored: evolution, latency, error rate</li>
+      </ul>
+      <aside class="notes">Full-circle proof: a colleague's real DW churn model, adapted to its two Excel sources, uploaded as-is. Six runs tracked, XGBoost champion at 0.91 AUC, deployed and consumed through the public API — every platform feature exercised by one real use case.</aside>
+    </section>
+
+    <!-- 22 ─ DEMO -->
+    <section data-background-gradient="radial-gradient(600px 400px at 50% 40%, #14264a 0%, #0b1220 70%)">
+      <div style="text-align:center; padding-top:90px">
+        <div class="demo-big">LIVE DEMO</div>
+        <p class="small" style="text-align:center; margin-top:30px; font-size:0.62em">
+          upload a notebook&nbsp; → &nbsp;watch it train&nbsp; → &nbsp;leaderboard&nbsp; → &nbsp;register the champion&nbsp; → &nbsp;deploy&nbsp; → &nbsp;predict from the public API
+        </p>
+      </div>
+      <aside class="notes">Switch to the browser: mlops.firasmahjoubi.app. Follow the ring from slide 7 live. Fallback if network fails: screenshots + the recorded run.</aside>
+    </section>
+
+    <!-- 23 ─ CONCLUSION -->
+    <section>
+      <h2>Conclusion</h2>
+      <div class="grid3" style="margin-top:26px">
+        <div class="card fragment" style="border-top:4px solid var(--cyan)"><h3>End-to-end lifecycle, automated</h3><p>Notebook → tracked runs → registry → live service → public API — from a single web interface, no infra knowledge required.</p></div>
+        <div class="card fragment" style="border-top:4px solid var(--violet)"><h3>MLOps maturity: level 0 → 1</h3><p>Repeatable pipelines, versioned models, one-click deployment; the platform itself delivered at level 2 through full CI/CD.</p></div>
+        <div class="card fragment" style="border-top:4px solid var(--good)"><h3>Real, production-grade infrastructure</h3><p>Runs on AKS behind Cloudflare, fully open-source stack, validated by a real churn use case.</p></div>
+      </div>
+      <aside class="notes">Three takeaways: the loop is closed, the maturity jump is measurable, and it's not a prototype — it runs on real cloud infrastructure today.</aside>
+    </section>
+
+    <!-- 24 ─ PERSPECTIVES -->
+    <section>
+      <h2>Perspectives</h2>
+      <ul class="checks" style="grid-template-columns:1fr 1fr; margin-top:24px">
+        <li class="fragment">Data-drift detection — feature stats at serve time</li>
+        <li class="fragment">Alerting — thresholds on error rate &amp; degradation</li>
+        <li class="fragment">A/B testing &amp; canary between model versions</li>
+        <li class="fragment">GPU scheduling for deep-learning workloads</li>
+        <li class="fragment">Multi-tenancy — teams &amp; role-based access</li>
+        <li class="fragment">Curated training image — pre-pinned ML packages</li>
+      </ul>
+      <aside class="notes">The monitoring foundation added in sprint 4 makes drift detection and alerting natural next steps; GPU and multi-tenancy would take it from single-team to organization-wide.</aside>
+    </section>
+
+    <!-- 25 ─ THANK YOU -->
+    <section class="titleslide">
+      <div class="logos">
+        <img src="assets/esprit.png" alt="ESPRIT">
+        <img src="assets/insomea.png" alt="INSOMEA">
+      </div>
+      <div style="padding-top:70px">
+        <h1 class="grad" style="font-size:2.3em">Thank you!</h1>
+        <div class="rule" style="margin-top:26px"></div>
+        <p class="small" style="text-align:center; font-size:0.6em">Questions are welcome · Firas Mahjoubi · mlops.firasmahjoubi.app</p>
+      </div>
+      <aside class="notes">Thank the jury; invite questions. Have the platform tab still open for follow-up questions.</aside>
+    </section>
+
+  </div>
+</div>
+<script src="reveal/reveal.js"></script>
+<script src="reveal/plugin/notes/notes.js"></script>
+<script>
+  Reveal.initialize({
+    width: 1280,
+    height: 720,
+    margin: 0.05,
+    hash: true,
+    slideNumber: 'c/t',
+    transition: 'slide',
+    backgroundTransition: 'fade',
+    controls: true,
+    progress: true,
+    plugins: [ RevealNotes ],
+  });
+</script>
+</body>
+</html>

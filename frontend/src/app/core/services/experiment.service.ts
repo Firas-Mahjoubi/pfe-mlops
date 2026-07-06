@@ -30,6 +30,14 @@ export type MlflowRunWithProject = MlflowRun & {
   project_name: string;
 };
 
+export interface RunArtifact {
+  name: string;
+  rel_path: string;
+  is_dir: boolean;
+  size: number;
+  is_image: boolean;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ExperimentService {
   private http = inject(HttpClient);
@@ -62,5 +70,19 @@ export class ExperimentService {
 
   deleteRun(runId: string): Observable<void> {
     return this.http.delete<void>(`${this.apiUrl}/experiments/run/${runId}`);
+  }
+
+  listArtifacts(runId: string, path = ''): Observable<{ path: string; files: RunArtifact[] }> {
+    return this.http.get<{ path: string; files: RunArtifact[] }>(
+      `${this.apiUrl}/experiments/run/${runId}/artifacts`,
+      { params: { path } }
+    );
+  }
+
+  getArtifactBlob(runId: string, path: string): Observable<Blob> {
+    return this.http.get(`${this.apiUrl}/experiments/run/${runId}/artifact`, {
+      params: { path },
+      responseType: 'blob',
+    });
   }
 }

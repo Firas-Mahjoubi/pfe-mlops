@@ -6,7 +6,8 @@ import { BaseChartDirective } from 'ng2-charts';
 import { ChartConfiguration, ChartData } from 'chart.js';
 import { ProjectService } from '../../../core/services/project.service';
 import { UploadService, UploadedFile, CodeWarning, NotebookConversion, ZipNotebookConversion } from '../../../core/services/upload.service';
-import { ExperimentService, MlflowRun } from '../../../core/services/experiment.service';
+import { ExperimentService, MlflowRun, RunArtifact } from '../../../core/services/experiment.service';
+import { DomSanitizer, SafeUrl } from '@angular/platform-browser';
 import { PipelineService, PipelineRun, RunLogs, RunError } from '../../../core/services/pipeline.service';
 import { ModelService, ModelVersion, ModelStage } from '../../../core/services/model.service';
 import {
@@ -774,8 +775,103 @@ interface ExperimentGroup {
                         </div>
                       }
                     </div>
+
+                    <!-- Artifacts -->
+                    <div>
+                      <div class="text-[10.5px] font-semibold tracking-[0.07em] uppercase text-ink3 mb-2.5">Artifacts</div>
+
+                      @if (artifactPath) {
+                        <div class="flex items-center flex-wrap gap-1 mb-2.5 text-[11.5px]">
+                          @for (crumb of artifactBreadcrumb(); track crumb.path; let last = $last) {
+                            <button type="button" (click)="goToArtifactPath(crumb.path)"
+                              [class]="last ? 'text-ink font-medium' : 'text-ink3 hover:text-ink2 transition-colors'">{{ crumb.label }}</button>
+                            @if (!last) { <span class="text-ink3/50">/</span> }
+                          }
+                        </div>
+                      }
+
+                      @if (loadingArtifacts) {
+                        <div class="text-[12.5px] text-ink3 py-3 text-center">Loading artifacts…</div>
+                      } @else if (artifactError) {
+                        <div class="text-[12.5px] text-bad py-3 text-center">{{ artifactError }}</div>
+                      } @else if (runArtifacts.length === 0) {
+                        <div class="text-[12.5px] text-ink3 py-3 text-center">No artifacts logged</div>
+                      } @else {
+                        <!-- Image previews -->
+                        @if (artifactImages.length > 0) {
+                          <div class="grid grid-cols-2 gap-2 mb-2.5">
+                            @for (img of artifactImages; track img.rel_path) {
+                              <button type="button" (click)="openLightbox(img.rel_path)"
+                                class="group bg-card border border-line rounded-lg overflow-hidden hover:border-ink3/60 transition-colors text-left">
+                                <div class="aspect-[4/3] bg-raised flex items-center justify-center overflow-hidden">
+                                  @if (artifactImageUrls.get(img.rel_path); as src) {
+                                    <img [src]="src" [alt]="img.name" class="w-full h-full object-contain" />
+                                  } @else {
+                                    <span class="text-[11px] text-ink3">loading…</span>
+                                  }
+                                </div>
+                                <div class="px-2.5 py-1.5 flex items-center justify-between gap-2">
+                                  <span class="text-[11px] text-ink2 truncate">{{ img.name }}</span>
+                                  <span class="mono text-[10px] text-ink3 shrink-0">{{ formatArtifactSize(img.size) }}</span>
+                                </div>
+                              </button>
+                            }
+                          </div>
+                        }
+
+                        <!-- Folders + other files -->
+                        @if (artifactOthers.length > 0) {
+                          <div class="bg-card border border-line rounded-lg divide-y divide-line">
+                            @for (entry of artifactOthers; track entry.rel_path) {
+                              <div class="flex items-center justify-between px-3.5 py-2.5 gap-2">
+                                @if (entry.is_dir) {
+                                  <button type="button" (click)="openFolder(entry)"
+                                    class="flex items-center gap-2 min-w-0 text-left group">
+                                    <svg class="w-4 h-4 text-ink3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v7a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/>
+                                    </svg>
+                                    <span class="text-[12.5px] text-ink2 group-hover:text-ink truncate">{{ entry.name }}</span>
+                                  </button>
+                                  <svg class="w-3.5 h-3.5 text-ink3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                  </svg>
+                                } @else {
+                                  <div class="flex items-center gap-2 min-w-0">
+                                    <svg class="w-4 h-4 text-ink3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 3h7l5 5v13a1 1 0 01-1 1H7a1 1 0 01-1-1V4a1 1 0 011-1z"/>
+                                    </svg>
+                                    <span class="text-[12.5px] text-ink2 truncate">{{ entry.name }}</span>
+                                  </div>
+                                  <div class="flex items-center gap-2.5 shrink-0">
+                                    <span class="mono text-[10.5px] text-ink3">{{ formatArtifactSize(entry.size) }}</span>
+                                    <button type="button" (click)="downloadArtifact(entry)"
+                                      class="text-ink3 hover:text-ink transition-colors" title="Download">
+                                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/>
+                                      </svg>
+                                    </button>
+                                  </div>
+                                }
+                              </div>
+                            }
+                          </div>
+                        }
+                      }
+                    </div>
                   </div>
                 </div>
+              </div>
+            }
+
+            <!-- Artifact lightbox -->
+            @if (lightboxUrl) {
+              <div class="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-8 backdrop-blur-sm cursor-zoom-out" (click)="closeLightbox()">
+                <img [src]="lightboxUrl" class="max-w-full max-h-full object-contain rounded-lg shadow-2xl" (click)="$event.stopPropagation()" />
+                <button (click)="closeLightbox()" class="absolute top-5 right-5 w-9 h-9 flex items-center justify-center rounded-md bg-white/10 hover:bg-white/20 text-white transition-colors">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                  </svg>
+                </button>
               </div>
             }
 
@@ -2100,11 +2196,27 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
   private pipelineService = inject(PipelineService);
   private modelService = inject(ModelService);
   private deploymentService = inject(DeploymentService);
+  private sanitizer = inject(DomSanitizer);
   project: Project | null = null;
   files: UploadedFile[] = [];
   runs: MlflowRun[] = [];
-  selectedRun: MlflowRun | null = null;
+  private _selectedRun: MlflowRun | null = null;
+  get selectedRun(): MlflowRun | null { return this._selectedRun; }
+  set selectedRun(run: MlflowRun | null) {
+    this._selectedRun = run;
+    this.resetArtifacts();
+    if (run) this.loadArtifacts(run.info.run_id, '');
+  }
   selectedRunIds = new Set<string>();
+
+  // Run-drawer artifacts
+  runArtifacts: RunArtifact[] = [];
+  artifactPath = '';
+  loadingArtifacts = false;
+  artifactError = '';
+  artifactImageUrls = new Map<string, SafeUrl>();
+  private artifactObjectUrls: string[] = [];
+  lightboxUrl: SafeUrl | null = null;
   experimentGroups: ExperimentGroup[] = [];
   expandedGroups = new Set<string>();
   showAllMetrics = false;
@@ -2739,6 +2851,105 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
     if (this.deploymentTimerInterval) clearInterval(this.deploymentTimerInterval);
     if (this.logPollInterval) clearInterval(this.logPollInterval);
     if (this.logElapsedInterval) clearInterval(this.logElapsedInterval);
+    this.resetArtifacts();
+  }
+
+  // ── Run-drawer artifacts ────────────────────────────────────────────────
+  private resetArtifacts(): void {
+    this.runArtifacts = [];
+    this.artifactPath = '';
+    this.artifactError = '';
+    this.loadingArtifacts = false;
+    this.lightboxUrl = null;
+    this.artifactImageUrls.clear();
+    for (const u of this.artifactObjectUrls) URL.revokeObjectURL(u);
+    this.artifactObjectUrls = [];
+  }
+
+  loadArtifacts(runId: string, path: string): void {
+    this.loadingArtifacts = true;
+    this.artifactError = '';
+    this.artifactPath = path;
+    this.experimentService.listArtifacts(runId, path).subscribe({
+      next: (res) => {
+        this.runArtifacts = res.files;
+        this.loadingArtifacts = false;
+        for (const f of res.files) {
+          if (f.is_image) this.loadArtifactImage(runId, f.rel_path);
+        }
+      },
+      error: () => {
+        this.loadingArtifacts = false;
+        this.artifactError = 'Could not load artifacts';
+      },
+    });
+  }
+
+  private loadArtifactImage(runId: string, relPath: string): void {
+    this.experimentService.getArtifactBlob(runId, relPath).subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(blob);
+        this.artifactObjectUrls.push(url);
+        this.artifactImageUrls.set(relPath, this.sanitizer.bypassSecurityTrustUrl(url));
+      },
+      error: () => {},
+    });
+  }
+
+  openFolder(entry: RunArtifact): void {
+    if (this._selectedRun) this.loadArtifacts(this._selectedRun.info.run_id, entry.rel_path);
+  }
+
+  artifactBreadcrumb(): { label: string; path: string }[] {
+    const crumbs = [{ label: 'artifacts', path: '' }];
+    let acc = '';
+    for (const seg of this.artifactPath.split('/').filter(Boolean)) {
+      acc = acc ? `${acc}/${seg}` : seg;
+      crumbs.push({ label: seg, path: acc });
+    }
+    return crumbs;
+  }
+
+  goToArtifactPath(path: string): void {
+    if (this._selectedRun) this.loadArtifacts(this._selectedRun.info.run_id, path);
+  }
+
+  downloadArtifact(entry: RunArtifact): void {
+    if (!this._selectedRun) return;
+    this.experimentService.getArtifactBlob(this._selectedRun.info.run_id, entry.rel_path).subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = entry.name;
+        a.click();
+        URL.revokeObjectURL(url);
+      },
+    });
+  }
+
+  openLightbox(relPath: string): void {
+    const url = this.artifactImageUrls.get(relPath);
+    if (url) this.lightboxUrl = url;
+  }
+
+  closeLightbox(): void {
+    this.lightboxUrl = null;
+  }
+
+  formatArtifactSize(bytes: number): string {
+    if (!bytes) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  get artifactImages(): RunArtifact[] {
+    return this.runArtifacts.filter((a) => a.is_image);
+  }
+
+  get artifactOthers(): RunArtifact[] {
+    return this.runArtifacts.filter((a) => !a.is_image);
   }
 
   loadFiles(projectId: string): void {

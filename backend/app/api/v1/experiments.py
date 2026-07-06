@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,6 +9,20 @@ from app.models.user import User
 from app.services import mlflow_service
 
 router = APIRouter(prefix="/experiments", tags=["experiments"])
+
+
+async def _assert_run_owned(experiment_id: str | None, user: User, db: AsyncSession) -> None:
+    """404 unless the run's experiment belongs to a project owned by ``user``."""
+    if not experiment_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
+    result = await db.execute(
+        select(Project).where(
+            Project.mlflow_experiment_id == experiment_id,
+            Project.user_id == user.id,
+        )
+    )
+    if result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
 
 
 @router.get("/")
@@ -98,6 +112,51 @@ async def compare_runs(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Failed to compare runs: {str(e)}",
         )
+
+
+@router.get("/run/{run_id}/artifacts")
+async def list_run_artifacts(
+    run_id: str,
+    path: str = Query("", description="Run-relative sub-directory"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List the files/folders a run logged to MLflow (served from MinIO)."""
+    try:
+        result = await mlflow_service.list_artifacts(run_id, path)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to list artifacts: {str(e)}",
+        )
+    await _assert_run_owned(result.get("experiment_id"), current_user, db)
+    return {"path": result["path"], "files": result["files"]}
+
+
+@router.get("/run/{run_id}/artifact")
+async def get_run_artifact(
+    run_id: str,
+    path: str = Query(..., description="Run-relative artifact path"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Stream a single logged artifact's bytes (images render inline)."""
+    try:
+        data, content_type, experiment_id = await mlflow_service.get_artifact_object(run_id, path)
+    except FileNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Artifact not found")
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to fetch artifact: {str(e)}",
+        )
+    await _assert_run_owned(experiment_id, current_user, db)
+    filename = path.rsplit("/", 1)[-1]
+    return Response(
+        content=data,
+        media_type=content_type,
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+    )
 
 
 @router.delete("/run/{run_id}", status_code=status.HTTP_204_NO_CONTENT)

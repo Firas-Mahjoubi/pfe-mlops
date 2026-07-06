@@ -20,7 +20,7 @@ import { MonitoringService, ServingStats } from '../../../core/services/monitori
 import { Project } from '../../../core/models/project.model';
 import { IconComponent } from '../../../shared/ui/icon/icon.component';
 import { BtnComponent } from '../../../shared/ui/btn/btn.component';
-import { StatusComponent } from '../../../shared/ui/status/status.component';
+import { StatusComponent, StatusKey } from '../../../shared/ui/status/status.component';
 import { ConfirmDialogComponent } from '../../../shared/ui/confirm-dialog/confirm-dialog.component';
 import { environment } from '../../../../environments/environment';
 
@@ -689,38 +689,78 @@ interface ExperimentGroup {
             <!-- Run Detail Drawer -->
             @if (selectedRun) {
               <div class="fixed inset-0 bg-black/60 z-50 flex justify-end backdrop-blur-sm" (click)="selectedRun = null">
-                <div class="w-full max-w-md bg-base border-l border-line overflow-y-auto" (click)="$event.stopPropagation()">
+                <div class="w-full max-w-xl bg-base border-l border-line overflow-y-auto" (click)="$event.stopPropagation()">
                   <!-- Drawer header -->
                   <div class="sticky top-0 bg-base/95 backdrop-blur border-b border-line px-5 h-14 flex items-center justify-between z-10">
-                    <div>
-                      <div class="text-[13px] font-semibold text-ink">Run Details</div>
-                      <div class="mono text-[10.5px] text-ink3">{{ selectedRun.info.run_id.substring(0, 16) }}…</div>
-                    </div>
+                    <div class="text-[13px] font-semibold text-ink">Run Details</div>
                     <button (click)="selectedRun = null" class="w-7 h-7 flex items-center justify-center rounded-md hover:bg-raised text-ink3 hover:text-ink transition-colors">
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                       </svg>
                     </button>
                   </div>
+                  <div class="h-[3px] edge-glow"></div>
 
                   <div class="p-5 space-y-5">
-                    <!-- Run info -->
-                    <div class="bg-card border border-line rounded-lg p-4 space-y-2.5">
-                      <div class="flex items-center justify-between">
-                        <span class="text-[10.5px] font-semibold tracking-[0.07em] uppercase text-ink3">Run Name</span>
-                        <span class="text-[12.5px] text-ink font-medium">{{ selectedRun.info.run_name || '—' }}</span>
+                    <!-- Hero header -->
+                    <div class="bg-card border border-line rounded-xl p-4 shadow-[var(--shadow-card)]">
+                      <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                          <div class="text-[16px] font-semibold text-ink leading-tight truncate">{{ selectedRun.info.run_name || 'Unnamed run' }}</div>
+                          <div class="flex items-center gap-1.5 mt-1.5">
+                            <button (click)="copyRunId(selectedRun.info.run_id)" type="button"
+                              class="group flex items-center gap-1.5 text-ink3 hover:text-ink2 transition-colors" title="Copy run ID">
+                              <span class="mono text-[11px]">{{ selectedRun.info.run_id.substring(0, 18) }}…</span>
+                              @if (runIdCopied) {
+                                <span class="text-[10px] text-good">copied</span>
+                              } @else {
+                                <svg class="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                                </svg>
+                              }
+                            </button>
+                          </div>
+                        </div>
+                        <app-status [s]="statusKey(selectedRun.info.status)"></app-status>
                       </div>
-                      <div class="flex items-center justify-between">
-                        <span class="text-[10.5px] font-semibold tracking-[0.07em] uppercase text-ink3">Status</span>
-                        <span [class]="getStatusClass(selectedRun.info.status)" class="text-[11px]">{{ selectedRun.info.status }}</span>
+
+                      <!-- identity chips -->
+                      <div class="flex items-center flex-wrap gap-2 mt-3">
+                        <span class="chip inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] text-ink2">
+                          <span class="w-1.5 h-1.5 rounded-full bg-cyan3"></span>
+                          {{ deriveModelKey(selectedRun) }}
+                        </span>
+                        @if (isRegistered(selectedRun)) {
+                          <span class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium bg-good/10 text-good ring-1 ring-good/20">
+                            ★ Registered v{{ registeredVersion(selectedRun) }}
+                          </span>
+                        }
                       </div>
-                      <div class="flex items-center justify-between">
-                        <span class="text-[10.5px] font-semibold tracking-[0.07em] uppercase text-ink3">Duration</span>
-                        <span class="mono text-[12px] text-ink2">{{ getDuration(selectedRun) }}</span>
+
+                      <!-- meta -->
+                      <div class="grid grid-cols-2 gap-2 mt-3">
+                        <div class="chip rounded-md px-2.5 py-2">
+                          <div class="text-[10px] uppercase tracking-[0.06em] text-ink3">Duration</div>
+                          <div class="mono text-[13px] text-ink mt-0.5">{{ getDuration(selectedRun) }}</div>
+                        </div>
+                        <div class="chip rounded-md px-2.5 py-2">
+                          <div class="text-[10px] uppercase tracking-[0.06em] text-ink3">Started</div>
+                          <div class="text-[12px] text-ink2 mt-0.5">{{ selectedRun.info.start_time | date:'MMM d, HH:mm' }}</div>
+                        </div>
                       </div>
-                      <div class="flex items-center justify-between">
-                        <span class="text-[10.5px] font-semibold tracking-[0.07em] uppercase text-ink3">Started</span>
-                        <span class="text-[12px] text-ink2">{{ selectedRun.info.start_time | date:'MMM d, y HH:mm' }}</span>
+
+                      <!-- actions -->
+                      <div class="flex items-center gap-2 mt-3.5">
+                        @if (selectedRun.info.status === 'FINISHED' && !isRegistered(selectedRun)) {
+                          <app-btn variant="primary" size="sm" (click)="promptRegister(selectedRun)">Register as model</app-btn>
+                        }
+                        <button type="button" (click)="promptDeleteExpRun(selectedRun.info.run_id, selectedRun.info.run_name)"
+                          class="ml-auto inline-flex items-center gap-1.5 text-[11.5px] text-ink3 hover:text-bad transition-colors">
+                          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.9 12.1a2 2 0 01-2 1.9H7.9a2 2 0 01-2-1.9L5 7m5 4v6m4-6v6M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3M4 7h16"/>
+                          </svg>
+                          Delete
+                        </button>
                       </div>
                     </div>
 
@@ -730,11 +770,14 @@ interface ExperimentGroup {
                       @if (selectedRun.data.metrics.length === 0) {
                         <div class="text-[12.5px] text-ink3 py-3 text-center">No metrics logged</div>
                       } @else {
-                        <div class="grid grid-cols-3 gap-2">
+                        <div class="grid grid-cols-3 gap-2.5">
                           @for (metric of headlineMetrics(selectedRun); track metric.label) {
-                            <div class="bg-card border border-line rounded-lg px-3 py-2.5 text-center">
-                              <div class="mono text-[15px] font-semibold text-ink leading-none">{{ metric.value.toFixed(4) }}</div>
-                              <div class="text-[10.5px] text-ink3 mt-1.5">{{ metric.label }}</div>
+                            <div class="bg-card border border-line rounded-lg p-3 ring-1 ring-inset" [class]="metricAccent(metric.label).ring">
+                              <div class="text-[10px] uppercase tracking-[0.06em] text-ink3">{{ metric.label }}</div>
+                              <div class="mono text-[19px] font-semibold leading-none mt-1.5" [class]="metricAccent(metric.label).text">{{ metric.value.toFixed(4) }}</div>
+                              <div class="h-1.5 rounded-full bg-raised mt-2.5 overflow-hidden">
+                                <div class="h-full rounded-full" [class]="metricAccent(metric.label).bar" [style.width.%]="(metric.value <= 1 ? metric.value : 1) * 100"></div>
+                              </div>
                             </div>
                           }
                         </div>
@@ -750,7 +793,10 @@ interface ExperimentGroup {
                           <div class="mt-2 bg-card border border-line rounded-lg divide-y divide-line">
                             @for (metric of selectedRun.data.metrics; track metric.key) {
                               <div class="flex items-center justify-between px-3.5 py-2">
-                                <span class="text-[12px] text-ink2">{{ metric.key }}</span>
+                                <span class="flex items-center gap-2 text-[12px] text-ink2">
+                                  @if (isHeadlineMetric(metric.key)) { <span class="w-1.5 h-1.5 rounded-full bg-cyan3"></span> }
+                                  {{ metric.key }}
+                                </span>
                                 <span class="mono text-[12px] text-ink font-medium">{{ metric.value.toFixed(6) }}</span>
                               </div>
                             }
@@ -761,18 +807,32 @@ interface ExperimentGroup {
 
                     <!-- Parameters -->
                     <div>
-                      <div class="text-[10.5px] font-semibold tracking-[0.07em] uppercase text-ink3 mb-2.5">Parameters</div>
+                      <div class="flex items-center justify-between mb-2.5">
+                        <div class="text-[10.5px] font-semibold tracking-[0.07em] uppercase text-ink3">
+                          Parameters
+                          <span class="ml-1.5 text-ink3/70 normal-case tracking-normal">({{ selectedRun.data.params.length }})</span>
+                        </div>
+                        @if (selectedRun.data.params.length > 6) {
+                          <div class="relative">
+                            <input type="text" [(ngModel)]="paramFilter" placeholder="filter…"
+                              class="w-32 bg-card border border-line rounded-md pl-2.5 pr-2 py-1 text-[11.5px] text-ink placeholder:text-ink3 focus-cyan" />
+                          </div>
+                        }
+                      </div>
                       @if (selectedRun.data.params.length === 0) {
                         <div class="text-[12.5px] text-ink3 py-3 text-center">No parameters logged</div>
                       } @else {
-                        <div class="bg-card border border-line rounded-lg divide-y divide-line">
-                          @for (param of selectedRun.data.params; track param.key) {
-                            <div class="flex items-center justify-between px-3.5 py-2.5">
-                              <span class="text-[12.5px] text-ink2">{{ param.key }}</span>
-                              <span class="mono text-[12px] text-ink">{{ param.value }}</span>
+                        <div class="bg-card border border-line rounded-lg divide-y divide-line max-h-64 overflow-y-auto">
+                          @for (param of filteredParams(selectedRun); track param.key) {
+                            <div class="flex items-center justify-between gap-3 px-3.5 py-2.5">
+                              <span class="text-[12.5px] text-ink2 truncate">{{ param.key }}</span>
+                              <span class="mono text-[12px] text-ink shrink-0">{{ param.value }}</span>
                             </div>
+                          } @empty {
+                            <div class="text-[12px] text-ink3 py-3 text-center">No params match "{{ paramFilter }}"</div>
                           }
                         </div>
+                        <div class="text-[10.5px] text-ink3/80 mt-1.5">Autolog captures every estimator in the pipeline — some params come from preprocessing steps, not only the final model.</div>
                       }
                     </div>
 
@@ -2217,6 +2277,8 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
   artifactImageUrls = new Map<string, SafeUrl>();
   private artifactObjectUrls: string[] = [];
   lightboxUrl: SafeUrl | null = null;
+  paramFilter = '';
+  runIdCopied = false;
   experimentGroups: ExperimentGroup[] = [];
   expandedGroups = new Set<string>();
   showAllMetrics = false;
@@ -2861,6 +2923,7 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
     this.artifactError = '';
     this.loadingArtifacts = false;
     this.lightboxUrl = null;
+    this.paramFilter = '';
     this.artifactImageUrls.clear();
     for (const u of this.artifactObjectUrls) URL.revokeObjectURL(u);
     this.artifactObjectUrls = [];
@@ -2950,6 +3013,44 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
 
   get artifactOthers(): RunArtifact[] {
     return this.runArtifacts.filter((a) => !a.is_image);
+  }
+
+  // ── Run-drawer presentation helpers ─────────────────────────────────────
+  statusKey(status: string): StatusKey {
+    switch (status) {
+      case 'FINISHED': return 'success';
+      case 'RUNNING': return 'running';
+      case 'FAILED': return 'failed';
+      case 'KILLED':
+      case 'CANCELED': return 'canceled';
+      default: return 'idle';
+    }
+  }
+
+  metricAccent(label: string): { text: string; bar: string; ring: string } {
+    switch (label) {
+      case 'F1': return { text: 'text-violet', bar: 'bg-violet', ring: 'ring-violet/30' };
+      case 'ROC-AUC': return { text: 'text-warn', bar: 'bg-warn', ring: 'ring-warn/30' };
+      default: return { text: 'text-cyan3', bar: 'bg-cyan3', ring: 'ring-cyan3/30' };
+    }
+  }
+
+  isHeadlineMetric(key: string): boolean {
+    return this.HEADLINE.some((h) => h.match.test(key));
+  }
+
+  filteredParams(run: MlflowRun): { key: string; value: string }[] {
+    const params = run.data?.params || [];
+    const q = this.paramFilter.trim().toLowerCase();
+    if (!q) return params;
+    return params.filter((p) => p.key.toLowerCase().includes(q) || p.value.toLowerCase().includes(q));
+  }
+
+  copyRunId(id: string): void {
+    navigator.clipboard?.writeText(id).then(() => {
+      this.runIdCopied = true;
+      setTimeout(() => (this.runIdCopied = false), 1500);
+    }).catch(() => {});
   }
 
   loadFiles(projectId: string): void {

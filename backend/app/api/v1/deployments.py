@@ -505,9 +505,16 @@ async def predict(
     n_instances = len(payload.instances) if isinstance(payload.instances, list) else 0
     started = time.perf_counter()
     try:
-        result_body = deployment_service.predict(
-            dep.inference_service_name, payload.instances
+        # Offload the blocking k8s-proxy call so it never stalls the event loop.
+        result_body = await asyncio.to_thread(
+            deployment_service.predict, dep.inference_service_name, payload.instances
         )
+    except deployment_service.PredictionError as e:
+        await log_prediction(
+            db, dep, (time.perf_counter() - started) * 1000, e.status_code, n_instances, "app"
+        )
+        logger.warning("Prediction failed: %s", e.detail)
+        raise HTTPException(status_code=e.status_code, detail=e.detail)
     except Exception as e:  # noqa: BLE001
         await log_prediction(
             db, dep, (time.perf_counter() - started) * 1000, 502, n_instances, "app"

@@ -16,6 +16,17 @@ KSERVE_GROUP = "serving.kserve.io"
 KSERVE_VERSION = "v1beta1"
 KSERVE_PLURAL = "inferenceservices"
 
+
+class PredictionError(Exception):
+    """Prediction failed at the model server / transport. Carries an HTTP status
+    hint and a human-readable detail so the API can surface the real reason
+    (instead of the caller seeing an opaque gateway/Cloudflare error)."""
+
+    def __init__(self, detail: str, status_code: int = 502):
+        super().__init__(detail)
+        self.detail = detail
+        self.status_code = status_code
+
 # Without explicit resources, KServe's mutating webhook injects defaults that
 # are too large for single-node KinD clusters (2 Gi request per replica → pods
 # stuck Pending with "Insufficient memory"). The values below fit comfortably
@@ -49,22 +60,33 @@ def _custom_api() -> client.CustomObjectsApi:
     return client.CustomObjectsApi(api_client=client.ApiClient(configuration=cfg))
 
 
+SUPPORTED_FRAMEWORKS = ("sklearn", "xgboost")
+
+
 def build_inference_service_spec(
     name: str,
     storage_uri: str,
     replicas: int = 1,
     resources: dict | None = None,
+    framework: str = "sklearn",
 ) -> dict:
-    """Build an InferenceService manifest for an MLflow-produced sklearn model.
+    """Build an InferenceService manifest for an MLflow-produced model.
 
-    storage_uri should point at the MLflow model artifact folder (the one
-    containing MLmodel and model.pkl), e.g.
-    s3://mlflow-artifacts/3/<run-id>/artifacts/model
+    storage_uri should point at the MLflow model artifact folder, e.g.
+    s3://mlflow-artifacts/3/<run-id>/artifacts/model — containing either a
+    sklearn pickle (model.joblib / model.pkl) or an XGBoost booster (model.bst).
+
+    framework selects the KServe model server: "sklearn" (default) or "xgboost".
+    XGBoost models must be served by the xgboost runtime — the sklearn server
+    cannot unpickle an XGBClassifier (no xgboost module) and a booster has no
+    sklearn `.predict`.
 
     resources: optional dict with `requests` / `limits` keys (k8s ResourceRequirements
     shape). Defaults to `DEFAULT_PREDICTOR_RESOURCES`, which is sized to fit a
     single-node KinD cluster while still being adequate on AKS / on-prem.
     """
+    if framework not in SUPPORTED_FRAMEWORKS:
+        framework = "sklearn"
     return {
         "apiVersion": f"{KSERVE_GROUP}/{KSERVE_VERSION}",
         "kind": "InferenceService",
@@ -84,13 +106,33 @@ def build_inference_service_spec(
             "predictor": {
                 "serviceAccountName": settings.KSERVE_SERVICE_ACCOUNT,
                 "minReplicas": replicas,
-                "sklearn": {
+                framework: {
                     "storageUri": storage_uri,
                     "resources": resources or DEFAULT_PREDICTOR_RESOURCES,
                 },
             },
         },
     }
+
+
+def detect_framework(storage_uri: str) -> str:
+    """Inspect the model artifact folder in MinIO to pick the KServe runtime.
+
+    An XGBoost booster is logged as model.bst / model.json / model.ubj; a sklearn
+    model as model.joblib / model.pkl. Defaults to "sklearn" if the store can't be
+    read (keeps prior behaviour for existing sklearn deployments).
+    """
+    from app.services import mlflow_service
+    try:
+        bucket, prefix = mlflow_service._parse_s3_uri(storage_uri)
+        s3 = mlflow_service._s3_client()
+        resp = s3.list_objects_v2(Bucket=bucket, Prefix=prefix.rstrip("/") + "/")
+        names = {obj["Key"].rsplit("/", 1)[-1].lower() for obj in resp.get("Contents", [])}
+        if names & {"model.bst", "model.json", "model.ubj"}:
+            return "xgboost"
+    except Exception:
+        logger.warning("detect_framework failed for %s; defaulting to sklearn", storage_uri, exc_info=True)
+    return "sklearn"
 
 
 def _patch_webhook_failure_policy(policy: str = "Ignore") -> bool:
@@ -135,7 +177,9 @@ def create_inference_service(name: str, storage_uri: str, replicas: int = 1) -> 
     """Create (or return existing) KServe InferenceService.
     If the webhook is unreachable, automatically patches failurePolicy=Ignore and retries."""
     api = _custom_api()
-    body = build_inference_service_spec(name, storage_uri, replicas)
+    framework = detect_framework(storage_uri)
+    logger.info("Deploying %s with KServe %s runtime (%s)", name, framework, storage_uri)
+    body = build_inference_service_spec(name, storage_uri, replicas, framework=framework)
 
     for attempt in range(2):
         try:
@@ -244,23 +288,34 @@ def predict(name: str, instances: list) -> dict:
     )
     body = {"instances": instances}
 
-    response = api_client.call_api(
-        path,
-        "POST",
-        header_params={
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-        },
-        body=body,
-        response_type="object",
-        # Without auth_settings, call_api skips Authorization header injection,
-        # so the K8s API server rejects with 401 even though the configured
-        # Configuration singleton has a valid bearer token. All generated K8s
-        # client methods pass this same value.
-        auth_settings=["BearerToken"],
-        _return_http_data_only=True,
-        _preload_content=True,
-    )
+    try:
+        response = api_client.call_api(
+            path,
+            "POST",
+            header_params={
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+            },
+            body=body,
+            response_type="object",
+            # Without auth_settings, call_api skips Authorization header injection,
+            # so the K8s API server rejects with 401 even though the configured
+            # Configuration singleton has a valid bearer token. All generated K8s
+            # client methods pass this same value.
+            auth_settings=["BearerToken"],
+            _return_http_data_only=True,
+            _preload_content=True,
+            # (connect, read) seconds — never hang the request (→ Cloudflare 520).
+            _request_timeout=(5, 30),
+        )
+    except ApiException as e:
+        # The K8s API proxy relays the model server's HTTP status + body, e.g. a
+        # KServe InferenceError. Surface that instead of a generic failure.
+        raise PredictionError(_extract_model_error(e), status_code=502) from e
+    except Exception as e:  # noqa: BLE001 — transport (timeout / connection reset)
+        if "timeout" in type(e).__name__.lower() or "timed out" in str(e).lower():
+            raise PredictionError("Model server did not respond in time (timeout).", status_code=504) from e
+        raise PredictionError(f"Prediction transport error: {e}", status_code=502) from e
 
     # When response_type="object", the client deserializes JSON into a dict.
     if isinstance(response, (bytes, str)):
@@ -269,3 +324,18 @@ def predict(name: str, instances: list) -> dict:
         except json.JSONDecodeError:
             return {"raw": response if isinstance(response, str) else response.decode()}
     return response
+
+
+def _extract_model_error(e: ApiException) -> str:
+    """Pull a human-readable message out of a KServe/K8s-proxy ApiException."""
+    raw = getattr(e, "body", None)
+    if raw:
+        try:
+            data = json.loads(raw)
+            msg = data.get("error") or data.get("detail") or data.get("message")
+            if msg:
+                return f"Model server error: {msg}"
+        except (json.JSONDecodeError, TypeError):
+            text = raw if isinstance(raw, str) else raw.decode(errors="replace")
+            return f"Model server error: {text[:400]}"
+    return f"Model server returned HTTP {getattr(e, 'status', '?')}."

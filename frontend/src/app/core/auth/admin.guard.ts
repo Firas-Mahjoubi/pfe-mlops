@@ -11,3 +11,4 @@ export const adminGuard: CanActivateFn = () => {
     map((u) => (u && u.role === 'admin' ? true : router.createUrlTree(['/dashboard']))),
   );
 };
+

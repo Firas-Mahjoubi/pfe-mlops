@@ -16,6 +16,7 @@ in `app/main.py`'s CORSMiddleware still protects the `/api/v1/...` routes.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import time
@@ -116,9 +117,15 @@ async def public_predict(
     n_instances = len(payload.instances) if isinstance(payload.instances, list) else 0
     started = time.perf_counter()
     try:
-        result_body = deployment_service.predict(
-            dep.inference_service_name, payload.instances
+        result_body = await asyncio.to_thread(
+            deployment_service.predict, dep.inference_service_name, payload.instances
         )
+    except deployment_service.PredictionError as e:
+        await log_prediction(
+            db, dep, (time.perf_counter() - started) * 1000, e.status_code, n_instances, "public"
+        )
+        logger.warning("Public prediction failed: %s", e.detail)
+        raise HTTPException(status_code=e.status_code, detail=e.detail)
     except Exception as e:  # noqa: BLE001
         await log_prediction(
             db, dep, (time.perf_counter() - started) * 1000, 502, n_instances, "public"

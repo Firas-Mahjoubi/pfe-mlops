@@ -115,24 +115,68 @@ def build_inference_service_spec(
     }
 
 
+# Booster filenames KServe's xgbserver can load directly (extension-based).
+_XGB_SERVABLE = {"model.bst", "model.json", "model.ubj"}
+# Any of these means "this is an XGBoost model" — includes MLflow autolog's
+# `model.xgb`, which xgbserver can NOT load by that name (handled by the copy step).
+_XGB_ANY = _XGB_SERVABLE | {"model.xgb"}
+
+
+def _list_model_files(storage_uri: str) -> set[str]:
+    """Lowercased basenames of objects directly under the model prefix (MinIO)."""
+    from app.services import mlflow_service
+    bucket, prefix = mlflow_service._parse_s3_uri(storage_uri)
+    s3 = mlflow_service._s3_client()
+    resp = s3.list_objects_v2(Bucket=bucket, Prefix=prefix.rstrip("/") + "/")
+    return {obj["Key"].rsplit("/", 1)[-1].lower() for obj in resp.get("Contents", [])}
+
+
 def detect_framework(storage_uri: str) -> str:
     """Inspect the model artifact folder in MinIO to pick the KServe runtime.
 
-    An XGBoost booster is logged as model.bst / model.json / model.ubj; a sklearn
-    model as model.joblib / model.pkl. Defaults to "sklearn" if the store can't be
-    read (keeps prior behaviour for existing sklearn deployments).
+    XGBoost models carry a booster file (model.bst / model.json / model.ubj, or
+    MLflow's model.xgb); sklearn models a pickle (model.joblib / model.pkl).
+    Defaults to "sklearn" if the store can't be read (keeps prior behaviour for
+    existing sklearn deployments).
     """
-    from app.services import mlflow_service
     try:
-        bucket, prefix = mlflow_service._parse_s3_uri(storage_uri)
-        s3 = mlflow_service._s3_client()
-        resp = s3.list_objects_v2(Bucket=bucket, Prefix=prefix.rstrip("/") + "/")
-        names = {obj["Key"].rsplit("/", 1)[-1].lower() for obj in resp.get("Contents", [])}
-        if names & {"model.bst", "model.json", "model.ubj"}:
+        if _list_model_files(storage_uri) & _XGB_ANY:
             return "xgboost"
     except Exception:
         logger.warning("detect_framework failed for %s; defaulting to sklearn", storage_uri, exc_info=True)
     return "sklearn"
+
+
+def ensure_xgboost_model_file(storage_uri: str) -> None:
+    """Make sure the model dir has a booster file KServe's xgbserver can load.
+
+    MLflow's xgboost autolog writes `model.xgb`, but xgbserver v0.13 only loads
+    `model.bst` / `model.json` / `model.ubj`. When only `model.xgb` (or another
+    non-servable booster) is present, copy it to `model.bst` in-place (xgboost
+    detects the format from file content, so the legacy-binary `.xgb` loads fine
+    under the `.bst` name). No-op if a servable file already exists.
+    """
+    from app.services import mlflow_service
+    try:
+        names = _list_model_files(storage_uri)
+    except Exception:
+        logger.warning("ensure_xgboost_model_file: cannot list %s; skipping", storage_uri, exc_info=True)
+        return
+    if names & _XGB_SERVABLE:
+        return  # already servable
+    source = next((f for f in ("model.xgb", "model.json", "model.ubj", "model.bst") if f in names), None)
+    if not source:
+        logger.warning("ensure_xgboost_model_file: no booster file found under %s", storage_uri)
+        return
+    bucket, prefix = mlflow_service._parse_s3_uri(storage_uri)
+    base = prefix.rstrip("/")
+    s3 = mlflow_service._s3_client()
+    s3.copy_object(
+        Bucket=bucket,
+        Key=f"{base}/model.bst",
+        CopySource={"Bucket": bucket, "Key": f"{base}/{source}"},
+    )
+    logger.info("Materialized model.bst from %s under %s", source, storage_uri)
 
 
 def _patch_webhook_failure_policy(policy: str = "Ignore") -> bool:
@@ -179,6 +223,10 @@ def create_inference_service(name: str, storage_uri: str, replicas: int = 1) -> 
     api = _custom_api()
     framework = detect_framework(storage_uri)
     logger.info("Deploying %s with KServe %s runtime (%s)", name, framework, storage_uri)
+    if framework == "xgboost":
+        # xgbserver only loads model.bst/.json/.ubj — materialize one if the
+        # artifact only has MLflow's model.xgb.
+        ensure_xgboost_model_file(storage_uri)
     body = build_inference_service_spec(name, storage_uri, replicas, framework=framework)
 
     for attempt in range(2):

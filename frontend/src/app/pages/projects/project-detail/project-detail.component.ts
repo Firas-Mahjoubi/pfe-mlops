@@ -14,6 +14,7 @@ import {
   DeploymentService,
   Deployment,
   DeploymentStatus,
+  DeploymentMetrics,
   ApiKey,
 } from '../../../core/services/deployment.service';
 import { MonitoringService, ServingStats } from '../../../core/services/monitoring.service';
@@ -1722,6 +1723,58 @@ interface ExperimentGroup {
               </div>
             </div>
 
+            <!-- A2. Resource usage -->
+            <div class="bg-card border border-line rounded-lg p-5">
+              <div class="text-[13px] font-semibold text-ink mb-1">Resource usage</div>
+              <div class="text-[11.5px] text-ink3 mb-3">Live CPU / RAM consumption of each deployed model pod</div>
+              @if (!hasActiveDeployment) {
+                <div class="text-[12.5px] text-ink3 text-center py-6">No deployment yet.</div>
+              } @else {
+                <div class="space-y-4">
+                  @for (dep of deployments; track dep.id) {
+                    @if (dep.status !== 'DELETED') {
+                      <div>
+                        <div class="flex items-center justify-between mb-2">
+                          <span class="mono text-[12px] text-ink">{{ dep.inference_service_name }}</span>
+                          <span class="text-[9.5px] px-1.5 py-0.5 rounded-full font-medium"
+                                [class]="dep.status === 'READY' ? 'bg-good/15 text-good' : 'bg-white/[0.06] text-ink3'">
+                            {{ dep.status }}
+                          </span>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <div class="flex justify-between mb-1">
+                              <span class="text-[10px] text-ink3">CPU</span>
+                              <span class="mono text-[10px] text-ink">{{ resourceMetrics[dep.id]?.cpu_pct != null ? resourceMetrics[dep.id].cpu_pct + '%' : '—' }}</span>
+                            </div>
+                            <div class="h-1 rounded-full bg-white/5 overflow-hidden">
+                              @if (resourceMetrics[dep.id]?.cpu_pct != null) {
+                                <div class="h-full rounded-full bg-cyan3/70" [style.width.%]="resourceMetrics[dep.id].cpu_pct"></div>
+                              }
+                            </div>
+                          </div>
+                          <div>
+                            <div class="flex justify-between mb-1">
+                              <span class="text-[10px] text-ink3">RAM</span>
+                              <span class="mono text-[10px] text-ink">{{ resourceMetrics[dep.id]?.mem_pct != null ? resourceMetrics[dep.id].mem_pct + '%' : '—' }}</span>
+                            </div>
+                            <div class="h-1 rounded-full bg-white/5 overflow-hidden">
+                              @if (resourceMetrics[dep.id]?.mem_pct != null) {
+                                <div class="h-full rounded-full bg-cyan3/70" [style.width.%]="resourceMetrics[dep.id].mem_pct"></div>
+                              }
+                            </div>
+                            @if (resourceMetrics[dep.id]) {
+                              <div class="mt-1 text-[10px] text-ink3">{{ resourceMetrics[dep.id].mem_used_mi }} Mi / {{ resourceMetrics[dep.id].mem_limit_gi }} Gi limit</div>
+                            }
+                          </div>
+                        </div>
+                      </div>
+                    }
+                  }
+                </div>
+              }
+            </div>
+
             <!-- B. Serving telemetry -->
             <div class="bg-card border border-line rounded-lg p-5">
               <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
@@ -2590,6 +2643,7 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
   servingStats: ServingStats | null = null;
   servingLoading = false;
   servingWindow = 24;
+  resourceMetrics: Record<string, DeploymentMetrics> = {};
   evolutionChartData: ChartData<'line'> = { labels: [], datasets: [] };
   servingReqChartData: ChartData<'bar'> = { labels: [], datasets: [] };
   servingLatChartData: ChartData<'line'> = { labels: [], datasets: [] };
@@ -2802,6 +2856,18 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
         this.servingStats = null;
       },
     });
+    this.loadResourceMetrics();
+  }
+
+  private loadResourceMetrics(): void {
+    this.deployments
+      .filter((d) => d.status === 'READY')
+      .forEach((d) => {
+        this.deploymentService.getMetrics(d.id).subscribe({
+          next: (m) => { this.resourceMetrics = { ...this.resourceMetrics, [d.id]: m }; },
+          error: () => {},
+        });
+      });
   }
 
   private buildServingCharts(s: ServingStats): void {

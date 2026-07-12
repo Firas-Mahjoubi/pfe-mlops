@@ -1,0 +1,384 @@
+%==============================================================================
+%  CHAPTER 3 — SYSTEM DESIGN
+%==============================================================================
+\chapter{System Design}
+\label{chap:requirements}
+\label{chap:design}
+
+\section{Introduction}
+This chapter designs the system as a whole, before the next chapter details
+its realization sprint by sprint. It presents the functional view (actors,
+requirements, and use cases), the global architecture in its logical and
+physical forms, the organization of the two pipelines, the detailed dynamic
+design through sequence diagrams, and the data model.
+
+% ---------------------------------------------------------------------------
+\section{Functional View}
+\label{sec:functional-view}
+
+\subsection{Actors}
+Four actors interact with the system:
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{Platform user (data scientist)} --- the primary actor: manages
+        projects, uploads code and data, triggers and follows training runs,
+        compares experiments, registers, promotes, deploys, and tests models,
+        and manages the \gls{api} keys that expose a deployment publicly. No
+        infrastructure knowledge is assumed: every cluster interaction happens
+        behind a button.
+  \item \textbf{External API client} --- a third-party website, mobile
+        application, or backend that calls a deployed model's public endpoint
+        with an \gls{api} key. It has no platform account; its whole contract
+        is one authenticated \gls{http} call.
+  \item \textbf{Administrator} --- inherits all user capabilities and, in
+        addition, manages accounts and roles and oversees every user's
+        projects, pipelines, and deployments.
+  \item \textbf{System (automated actors)} --- the training pipeline and the
+        model server act on the user's behalf once triggered; they appear as
+        participants in the sequence diagrams.
+\end{itemize}
+
+\subsection{Functional Requirements}
+The platform must provide the following functional capabilities, grouped by
+module:
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{Authentication and sessions}: sign up, sign in, refresh the
+        access token, and retrieve the current user's profile and role.
+  \item \textbf{Project management}: create, list, update, and delete projects;
+        bind each project to its own tracking experiment; enforce strict
+        per-owner isolation (foreign resources return \texttt{404}).
+  \item \textbf{Upload and code handling}: upload code
+        (\texttt{.py}, \texttt{.ipynb}, \texttt{.zip}) and datasets;
+        auto-detect the entry script; convert notebooks to runnable scripts;
+        run a pre-flight static analysis that warns about common pitfalls.
+  \item \textbf{Training execution}: trigger a training run in an isolated
+        cluster pod, stream its logs live to the browser, and install missing
+        dependencies automatically.
+  \item \textbf{Experiment tracking}: capture parameters, metrics, and
+        artifacts of every run automatically; browse and compare runs; open a
+        run-details view with an artifact browser (list, preview, download).
+  \item \textbf{Model registry}: register a run as a versioned model, list its
+        versions, and promote them across Staging / Production / Archived.
+  \item \textbf{Deployment}: deploy a registered version as a live service in
+        one click, detect the model framework automatically
+        (scikit-learn / XGBoost), track the deployment status and endpoint, and
+        delete a deployment.
+  \item \textbf{Prediction}: test predictions from the interface, with readable
+        error reporting when an input or the model server fails.
+  \item \textbf{Public API and keys}: create, list, and revoke per-deployment
+        \gls{api} keys (stored hashed); serve a public, key-authenticated
+        prediction endpoint; generate ready-to-paste code snippets.
+  \item \textbf{Monitoring}: display live cluster and per-pod resource metrics,
+        and per-project serving telemetry (request volume, error rate, latency,
+        timeline).
+  \item \textbf{Diagnostics}: capture and surface the failure reason of a
+        failed run so the user understands \emph{why} it failed.
+  \item \textbf{Administration}: manage user accounts (activate, deactivate,
+        promote, demote, purge, delete), consult platform-wide statistics, and
+        oversee every user's projects, pipelines, and deployments
+        (administrator only).
+\end{itemize}
+
+\subsection{Non-Functional Requirements}
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{Security}: stateless \gls{jwt} authentication~\cite{rfc7519};
+        passwords stored as bcrypt hashes and \gls{api} keys as \gls{sha}-256
+        hashes~\cite{owasp_api}; strict ownership checks; administrator-only
+        endpoints.
+  \item \textbf{Performance}: a fully asynchronous backend, so slow external
+        calls never block other requests.
+  \item \textbf{Scalability and isolation}: every training job and model
+        server runs in its own resource-limited pod.
+  \item \textbf{Portability}: identical behavior on a local KinD cluster and
+        on \gls{aks}, everything expressed as Kubernetes resources.
+  \item \textbf{Reproducibility}: code, parameters, metrics, and artifacts of
+        every run captured automatically.
+  \item \textbf{Usability}: the whole lifecycle from one web interface; no
+        kubectl, no \gls{yaml}, no cloud console.
+\end{itemize}
+
+\subsection{Global Use-Case Diagram}
+\label{sec:usecases}
+Figure~\ref{fig:usecase-global} summarizes the interactions of the three human
+actors with the system.
+\begin{figure}[H]\centering
+  \includegraphics[width=0.95\textwidth,height=0.48\textheight,keepaspectratio]{usecase_global}
+  \caption{Global use-case diagram of the platform}
+  \label{fig:usecase-global}
+\end{figure}
+
+\subsection{Use-Case Refinements}
+Tables~\ref{tab:uc-signin} to~\ref{tab:uc-public} refine one central use case
+per lifecycle area; the remaining flows are detailed by the sequence diagrams
+of Section~\ref{sec:seq-diagrams}.
+
+\begin{table}[H]\centering
+\renewcommand{\arraystretch}{1.2}
+\caption{Textual description of the ``Sign in'' use case}\label{tab:uc-signin}
+\begin{tabularx}{\textwidth}{|>{\bfseries}p{3.2cm}|X|}
+\hline
+Use case & Sign in\\ \hline
+Actor & Platform user\\ \hline
+Precondition & The user already has a registered account.\\ \hline
+Post-condition & The user is authenticated; an access/refresh token pair is issued.\\ \hline
+Nominal scenario & 1.~The user submits email and password.\newline 2.~The system verifies the password against its stored hash.\newline 3.~The system issues a \gls{jwt} access token and a refresh token.\newline 4.~The user is redirected to the dashboard.\\ \hline
+Exceptions & Invalid credentials: the request is rejected with a clear error.\\ \hline
+\end{tabularx}
+\end{table}
+
+\begin{table}[H]\centering
+\renewcommand{\arraystretch}{1.2}
+\caption{Textual description of the ``Trigger a training run'' use case}\label{tab:uc-train}
+\begin{tabularx}{\textwidth}{|>{\bfseries}p{3.2cm}|X|}
+\hline
+Use case & Trigger a training run\\ \hline
+Actor & Platform user\\ \hline
+Precondition & The user is authenticated and has uploaded code (and optionally a dataset) to a project.\\ \hline
+Post-condition & A pipeline run executes on the cluster; its metrics, parameters, and artifacts are recorded.\\ \hline
+Nominal scenario & 1.~The user clicks ``Run code''.\newline 2.~The backend submits a pipeline to the orchestrator.\newline 3.~An isolated pod downloads the code, installs dependencies, and runs the entry script.\newline 4.~The autolog wrapper records results to the tracking server.\newline 5.~The user follows the live logs and the captured metrics.\\ \hline
+Exceptions & The script fails: the error is captured and surfaced to the user; no model is registered.\\ \hline
+\end{tabularx}
+\end{table}
+
+\begin{table}[H]\centering
+\renewcommand{\arraystretch}{1.2}
+\caption{Textual description of the ``Deploy a model'' use case}\label{tab:uc-deploy}
+\begin{tabularx}{\textwidth}{|>{\bfseries}p{3.2cm}|X|}
+\hline
+Use case & Deploy a model\\ \hline
+Actor & Platform user\\ \hline
+Precondition & A model version is registered in the registry.\\ \hline
+Post-condition & A live prediction service is running and reachable on the cluster.\\ \hline
+Nominal scenario & 1.~The user clicks ``Deploy'' on a registered model.\newline 2.~The backend detects the model's framework and creates an \texttt{InferenceService}.\newline 3.~The serving operator reconciles it into a Deployment, Service, and Ingress.\newline 4.~The model server loads the artifact from object storage.\newline 5.~The status and endpoint are reported back to the user.\\ \hline
+Exceptions & The service fails to become ready: the deployment is marked failed and the user is notified.\\ \hline
+\end{tabularx}
+\end{table}
+
+\begin{table}[H]\centering
+\renewcommand{\arraystretch}{1.2}
+\caption{Textual description of the ``Call the public prediction endpoint'' use case}\label{tab:uc-public}
+\begin{tabularx}{\textwidth}{|>{\bfseries}p{3.2cm}|X|}
+\hline
+Use case & Call the public prediction endpoint\\ \hline
+Actor & External \gls{api} client\\ \hline
+Precondition & The model is deployed and the client holds a valid \gls{api} key.\\ \hline
+Post-condition & The client receives a prediction from the deployed model.\\ \hline
+Nominal scenario & 1.~The client sends a request with an \texttt{Authorization: Bearer} key.\newline 2.~The backend hashes the key and looks it up, scoped to the deployment.\newline 3.~The backend confirms the deployment is ready.\newline 4.~The request is forwarded to the model server.\newline 5.~The prediction is returned to the client.\\ \hline
+Exceptions & Invalid or revoked key: the backend returns \texttt{401}.\\ \hline
+\end{tabularx}
+\end{table}
+
+% ---------------------------------------------------------------------------
+\section{Global Architecture}
+\label{sec:architecture}
+
+\subsection{Logical Architecture}
+\label{sec:app-architecture}
+The application adopts a \textbf{four-tier layered architecture}
+(Figure~\ref{fig:layered-arch}):
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{Presentation}: an Angular single-page application consuming
+        the backend's \gls{rest} \gls{api};
+  \item \textbf{API}: FastAPI routers that validate requests and enforce
+        authentication and ownership;
+  \item \textbf{Service}: the business logic orchestrating the cluster systems
+        (pipelines, MLflow, KServe, object storage);
+  \item \textbf{Data}: SQLAlchemy models mapped onto PostgreSQL.
+\end{itemize}
+
+\begin{figure}[H]\centering
+  \includegraphics[width=\textwidth,keepaspectratio]{logical_arch}
+  \caption{Four-tier layered architecture and the cluster systems it orchestrates}
+  \label{fig:layered-arch}
+\end{figure}
+
+The layered style was preferred over microservices for proportionality: the
+platform already delegates its heavyweight concerns (pipeline execution, model
+serving, artifact storage) to dedicated cluster components. The result is one
+backend image and one frontend image, each independently deployable.
+
+\subsection{Physical Architecture}
+\label{sec:physical}
+Everything runs on one Kubernetes cluster --- \gls{aks} in production, KinD
+locally, same code. Public traffic follows the path \emph{browser
+$\rightarrow$ Cloudflare edge (\gls{tls}) $\rightarrow$ tunnel agent
+$\rightarrow$ frontend $\rightarrow$ backend $\rightarrow$ cluster systems}.
+Figure~\ref{fig:physical-arch} shows the topology: the platform's own
+workloads run as long-lived deployments, while training jobs and model servers
+are created and destroyed on demand, each in its own resource-limited pod.
+
+\begin{figure}[H]\centering
+  \includegraphics[width=\textwidth,height=0.55\textheight,keepaspectratio]{physical_arch}
+  \caption{Physical architecture of the platform on the Kubernetes cluster}
+  \label{fig:physical-arch}
+\end{figure}
+
+% ---------------------------------------------------------------------------
+\section{Pipeline Organization}
+\label{sec:pipeline-org}
+Two flows structure the whole system: a training path and a serving path. They
+meet only in the object store and the registry --- training produces artifacts
+and versions, serving consumes them --- so each half can evolve, scale, and
+fail independently.
+
+The \textbf{training path} starts from an upload: the backend stores code and
+dataset in the object store, then submits a \gls{kfp} pipeline whose single
+step runs in an isolated pod and executes the user's code under an autolog
+wrapper (Figure~\ref{fig:pipeline-flow}).
+
+\begin{figure}[H]\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}
+  \node[stagenode,fill=diagblue!12] (trig) {Trigger\\run};
+  \node[stepnode,right=1.5cm of trig] (dl) {Download\\code + data};
+  \node[stepnode,right=0.5cm of dl] (dep) {Install\\dependencies};
+  \node[stepnode,right=0.5cm of dep] (conv) {Convert\\notebook};
+  \node[stepnode,right=0.5cm of conv] (run) {Autolog\\runner + run};
+  \node[storenode,right=1.5cm of run] (ml) {\includegraphics[height=0.5cm]{mlflow}\\metrics \textperiodcentered{} params\\artifacts};
+  \node[stagenode,below=1.1cm of conv,fill=diaggreen!10,draw=diaggreen!60] (logs) {Live logs\\$\rightarrow$ UI};
+  \begin{scope}[on background layer]
+    \node[clusterbox,fit=(dl)(dep)(conv)(run),
+          label={[font=\scriptsize\bfseries,text=diagblue]above:{Isolated pod (Kubernetes)}}] (pod) {};
+  \end{scope}
+  \draw[flowarrow] (trig) -- (dl);
+  \draw[flowarrow] (dl) -- (dep);
+  \draw[flowarrow] (dep) -- (conv);
+  \draw[flowarrow] (conv) -- (run);
+  \draw[flowarrow] (run) -- (ml);
+  \draw[flowarrow,draw=diaggreen!70] (pod.south) -- (logs);
+\end{tikzpicture}}
+\caption{Training path: from trigger to captured experiment}
+\label{fig:pipeline-flow}
+\end{figure}
+
+The \textbf{serving path} starts from the registry: a registered model version
+is deployed by creating one declarative \texttt{InferenceService} resource,
+which the serving operator reconciles into a running model server loading its
+artifact from the object store (Figure~\ref{fig:deploy-flow}).
+
+\begin{figure}[H]\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}
+  \node[stagenode,fill=diagblue!12] (reg) {Register\\model version};
+  \node[stepnode,right=0.7cm of reg] (isvc) {Backend creates\\InferenceService};
+  \node[stepnode,right=0.7cm of isvc] (op) {\includegraphics[height=0.45cm]{kserve}\\KServe operator\\reconciles};
+  \node[stepnode,right=0.7cm of op,minimum height=2.4cm] (res) {Deployment\\Service\\Ingress};
+  \node[storenode,right=0.7cm of res] (srv) {Model server\\loads artifact\\\includegraphics[height=0.4cm]{minio}};
+  \node[stagenode,right=0.7cm of srv,fill=diaggreen!12,draw=diaggreen!60] (ready) {READY\\$\rightarrow$ Predict};
+  \draw[flowarrow] (reg) -- (isvc);
+  \draw[flowarrow] (isvc) -- (op);
+  \draw[flowarrow] (op) -- (res);
+  \draw[flowarrow] (res) -- (srv);
+  \draw[flowarrow] (srv) -- (ready);
+\end{tikzpicture}}
+\caption{Serving path: from a registered model to a live prediction service}
+\label{fig:deploy-flow}
+\end{figure}
+
+% ---------------------------------------------------------------------------
+\section{Sequence Diagrams}
+\label{sec:seq-diagrams}
+The dynamic behavior of the main flows is detailed by sequence diagrams,
+grouped by lifecycle area.
+
+\subsection{Authentication}
+Figures~\ref{fig:seq-signup} and~\ref{fig:seq-login} detail the sign-up and
+login flows on which every later interaction depends.
+\begin{figure}[H]\centering
+  \includegraphics[width=0.92\textwidth,height=0.42\textheight,keepaspectratio]{seq_signup}
+  \caption{Sequence diagram of the sign-up flow}
+  \label{fig:seq-signup}
+\end{figure}
+\begin{figure}[H]\centering
+  \includegraphics[width=0.92\textwidth,height=0.42\textheight,keepaspectratio]{seq_login}
+  \caption{Sequence diagram of the login flow}
+  \label{fig:seq-login}
+\end{figure}
+
+\subsection{Upload and Training}
+Figure~\ref{fig:seq-upload} details the upload flow that feeds the pipeline,
+and Figure~\ref{fig:seq-training} the training-run flow itself.
+\begin{figure}[H]\centering
+  \includegraphics[width=0.92\textwidth,height=0.42\textheight,keepaspectratio]{seq_upload}
+  \caption{Sequence diagram of uploading code and data to a project}
+  \label{fig:seq-upload}
+\end{figure}
+\begin{figure}[H]\centering
+  \includegraphics[width=0.92\textwidth,height=0.42\textheight,keepaspectratio]{seq_training}
+  \caption{Sequence diagram of triggering a custom-code training run}
+  \label{fig:seq-training}
+\end{figure}
+
+\subsection{Registry and Deployment}
+Figure~\ref{fig:seq-promote} details the promotion flow, and
+Figure~\ref{fig:seq-deploy} the deploy-and-predict flow.
+\begin{figure}[H]\centering
+  \includegraphics[width=0.92\textwidth,height=0.42\textheight,keepaspectratio]{seq_promote}
+  \caption{Sequence diagram of promoting a model version}
+  \label{fig:seq-promote}
+\end{figure}
+\begin{figure}[H]\centering
+  \includegraphics[width=0.92\textwidth,height=0.42\textheight,keepaspectratio]{seq_deploy}
+  \caption{Sequence diagram of deploying a model and requesting a prediction}
+  \label{fig:seq-deploy}
+\end{figure}
+
+\subsection{Public API and Administration}
+Figure~\ref{fig:seq-public} details how an external client calls the public
+endpoint, and Figure~\ref{fig:seq-admin} how an administrator manages user
+accounts.
+\begin{figure}[H]\centering
+  \includegraphics[width=0.92\textwidth,height=0.42\textheight,keepaspectratio]{seq_public_predict}
+  \caption{Sequence diagram of an external client calling the public endpoint}
+  \label{fig:seq-public}
+\end{figure}
+\begin{figure}[H]\centering
+  \includegraphics[width=0.92\textwidth,height=0.42\textheight,keepaspectratio]{seq_admin_users}
+  \caption{Sequence diagram of administrator user management}
+  \label{fig:seq-admin}
+\end{figure}
+
+% ---------------------------------------------------------------------------
+\section{Data Model}
+\label{sec:data-model}
+The domain model is deliberately small. \texttt{User} owns \texttt{Project}; a
+project accumulates \texttt{PipelineRun}s and \texttt{MLModel}s; a model can
+become a \texttt{Deployment}, which owns its \texttt{DeploymentApiKey}s and
+accumulates one \texttt{PredictionLog} row per served prediction. The
+scientific content of a run (metrics, parameters, artifacts) deliberately
+lives in the tracking server; the platform's database holds only identity,
+ownership, lifecycle state, and telemetry. Figure~\ref{fig:class-global} shows
+the global class diagram and Table~\ref{tab:entities} the entities with their
+key attributes.
+
+\begin{figure}[H]\centering
+  \includegraphics[width=0.95\textwidth,height=0.55\textheight,keepaspectratio]{class_domain}
+  \caption{Global class diagram of the platform}
+  \label{fig:class-global}
+\end{figure}
+
+\begin{table}[H]\centering
+\renewcommand{\arraystretch}{1.15}
+\caption{Domain entities and key attributes}\label{tab:entities}
+\small
+\begin{tabularx}{\textwidth}{|l|X|}
+\hline
+\rowcolor{primary!15}
+\textbf{Entity} & \textbf{Key attributes}\\
+\hline
+\texttt{User} & id; unique email; bcrypt \texttt{hashed\_password}; \texttt{role} (\texttt{user}/\texttt{admin}); \texttt{is\_active}\\ \hline
+\texttt{Project} & id; name, description; \texttt{owner\_id}; \texttt{experiment\_id} of its tracking experiment\\ \hline
+\texttt{PipelineRun} & id; \texttt{project\_id}; \texttt{kfp\_run\_id}; status (pending/running/succeeded/failed); timestamps\\ \hline
+\texttt{MLModel} & id; \texttt{project\_id}; registered name + version; stage (Staging/Production/Archived)\\ \hline
+\texttt{Deployment} & id; \texttt{model\_id}; \texttt{inference\_service\_name}; status; prediction endpoint \gls{url}\\ \hline
+\texttt{DeploymentApiKey} & id; \texttt{deployment\_id}; \gls{sha}-256 \texttt{key\_hash} (plaintext never stored); display prefix; \texttt{revoked\_at}\\ \hline
+\texttt{PredictionLog} & id; \texttt{deployment\_id}, \texttt{project\_id}; \texttt{latency\_ms}; \texttt{status\_code}; batch size; source (app/public); indexed timestamp\\ \hline
+\end{tabularx}
+\end{table}
+
+% ---------------------------------------------------------------------------
+\section{Conclusion}
+This chapter fixed the design of the system: four actors and their use cases,
+a layered application in front of specialized cluster systems, one training
+path and one serving path meeting in the object store and the registry, the
+dynamic flows as sequence diagrams, and a compact domain model. The next
+chapter details how this design was realized, sprint by sprint.

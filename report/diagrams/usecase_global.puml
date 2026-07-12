@@ -1,6 +1,12 @@
 @startuml usecase_global
 ' Render:  plantuml -tpdf usecase_global.puml   (or paste into plantuml.com)
 ' Then move usecase_global.pdf into ../images/
+' Smetana (PlantUML's built-in layout engine) is used instead of the default
+' Graphviz/dot backend: with dot, Admin's edges to the admin-only use cases
+' (declared at the end of the rectangle) pull it far above the User/Client
+' column no matter the declaration order or hidden-edge hints; Smetana keeps
+' all three actors in one evenly-spaced vertical column.
+!pragma layout smetana
 left to right direction
 skinparam packageStyle rectangle
 skinparam shadowing false

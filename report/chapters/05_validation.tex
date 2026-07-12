@@ -1,0 +1,181 @@
+%==============================================================================
+%  CHAPTER 5 — VALIDATION AND RESULTS
+%==============================================================================
+\chapter{Validation and Results}
+\label{chap:validation}
+
+\section{Introduction}
+This chapter validates the platform in two complementary ways. First, a
+functional validation: every capability delivered by the sprints was exercised
+against acceptance scenarios. Second, an end-to-end validation on a
+\emph{real} use case: a telecom churn model, trained, tracked, registered,
+deployed, and consumed entirely through the platform.
+
+% ---------------------------------------------------------------------------
+\section{Functional Validation}
+\label{sec:functional-validation}
+Each increment was validated manually against its acceptance scenarios before
+its sprint closed. Table~\ref{tab:tests} consolidates the main scenarios by
+capability area.
+
+\begin{table}[H]\centering
+\renewcommand{\arraystretch}{1.15}
+\caption{Consolidated test scenarios}\label{tab:tests}
+\small
+\begin{tabularx}{\textwidth}{|X|X|c|}
+\hline
+\rowcolor{primary!15}
+\textbf{Scenario} & \textbf{Expected result} & \textbf{Status}\\
+\hline
+\multicolumn{3}{|l|}{\cellcolor{primary!8}\textbf{Authentication and projects (Sprint 1)}}\\ \hline
+Sign up, then sign in & Tokens issued; redirect to dashboard & OK\\ \hline
+Sign in with wrong password & \texttt{401}, no token issued & OK\\ \hline
+Access token expiry & Session silently renewed via refresh token & OK\\ \hline
+Create a project & Stored and bound to a new tracking experiment & OK\\ \hline
+Open another user's project & \texttt{404}, resource invisible & OK\\ \hline
+\multicolumn{3}{|l|}{\cellcolor{primary!8}\textbf{Training and tracking (Sprint 2)}}\\ \hline
+Upload a \texttt{.zip} without an entry script & Entry script auto-detected by priority order & OK\\ \hline
+Run a scikit-learn script & Metrics, parameters, and model captured automatically & OK\\ \hline
+Run a real-world Colab notebook & Converted at upload, shims applied, run succeeds & OK\\ \hline
+Run a script with a missing dependency & Dependency installed in the pod before execution & OK\\ \hline
+Run a failing script & Run marked failed; readable reason shown on the run & OK\\ \hline
+Watch logs during a run & Log lines stream live to the browser & OK\\ \hline
+Open a run's artifacts & Folders navigable; images preview; files download & OK\\ \hline
+Request another user's artifacts & \texttt{404}, the run is not revealed & OK\\ \hline
+\multicolumn{3}{|l|}{\cellcolor{primary!8}\textbf{Registry and deployment (Sprint 3)}}\\ \hline
+Register a run, promote to Production & Version and stage updated in registry and interface & OK\\ \hline
+Deploy a registered model & InferenceService created; status reaches READY & OK\\ \hline
+Deploy an XGBoost model & Framework detected; booster materialized; served natively & OK\\ \hline
+Predict with the wrong feature count & Readable \texttt{502} carrying the model server's message & OK\\ \hline
+Delete a deployment & Cluster resources removed; record cleaned up & OK\\ \hline
+\multicolumn{3}{|l|}{\cellcolor{primary!8}\textbf{Public API, monitoring, administration (Sprint 4)}}\\ \hline
+Call the public endpoint with a valid key & Prediction returned without a platform account & OK\\ \hline
+Call with a revoked key & \texttt{401} & OK\\ \hline
+Send predictions, open the Monitoring tab & Volume, error rate, and latency KPIs reflect the calls & OK\\ \hline
+Call an admin endpoint as a normal user & \texttt{403} & OK\\ \hline
+Administrator attempts self-demotion & Refused with an explanatory error & OK\\ \hline
+\end{tabularx}
+\end{table}
+
+% ---------------------------------------------------------------------------
+\section{End-to-End Case Study: Telecom Churn}
+\label{sec:case-study}
+
+\subsection{Scenario}
+The platform was validated with a real churn-prediction use case built on
+operational data from a regional telecom operator: a file of terminated
+customers and a file of network incidents, joined and transformed into
+customer-level features by a Jupyter notebook. The complete journey runs
+through the platform only (Figure~\ref{fig:casestudy-journey}): the notebook
+and its two Excel files are uploaded as one zip; the notebook is
+\textbf{automatically converted} to a script (Section~\ref{sec:sprint2});
+the run executes on the cluster with autolog capturing every metric; the best
+model is registered, promoted, deployed, and finally called from outside
+through the public \gls{api}.
+
+\begin{figure}[H]\centering
+  \includegraphics[width=\textwidth,keepaspectratio]{casestudy_journey}
+  \caption{Case-study journey: one dataset, the full lifecycle on the platform}
+  \label{fig:casestudy-journey}
+\end{figure}
+
+\subsection{Evaluation Metrics}
+Churn data is imbalanced: most clients stay, few leave. Three complementary
+metrics are therefore used. \textbf{Accuracy} measures overall correctness but
+can be inflated by the majority class. The \textbf{F1-score} focuses on the
+churn class only, combining precision (are the raised alerts correct?) and
+recall (how many real churners are caught?), so it cannot be gamed by
+predicting ``no churn'' everywhere. The \textbf{\gls{roc}-\gls{auc}} evaluates
+the model's \emph{ranking}: the probability that a random churner receives a
+higher risk score than a random non-churner, independently of any decision
+threshold --- the right measure when the business goal is ``call the most
+at-risk clients first''.
+
+\subsection{Model and Results}
+The model is an XGBoost classifier trained on an 80/20 split, with SMOTE
+applied to the training part to compensate for class imbalance.
+Table~\ref{tab:churn-metrics} reports the evaluation results captured by the
+platform, and Table~\ref{tab:churn-cm} the confusion matrix on the test set.
+
+\begin{table}[H]\centering
+\renewcommand{\arraystretch}{1.2}
+\caption{Churn model: evaluation metrics (test set)}\label{tab:churn-metrics}
+\small
+\begin{tabularx}{\textwidth}{|X|c|X|}
+\hline
+\rowcolor{primary!15}
+\textbf{Metric} & \textbf{Value} & \textbf{Reading}\\
+\hline
+Accuracy & 0.881 & Overall correctness on all clients\\ \hline
+F1-score (churn class) & 0.773 & Balance of precision and recall on churners\\ \hline
+ROC-AUC & 0.911 & Excellent ranking of clients by churn risk\\ \hline
+ROC-AUC (5-fold CV) & $\approx$ 0.91 & Stable across folds --- no overfitting to one split\\ \hline
+\end{tabularx}
+\end{table}
+
+\begin{table}[H]\centering
+\renewcommand{\arraystretch}{1.2}
+\caption{Churn model: confusion matrix (test set)}\label{tab:churn-cm}
+\small
+\begin{tabular}{|l|c|c|}
+\hline
+\rowcolor{primary!15}
+ & \textbf{Predicted: active} & \textbf{Predicted: churn}\\
+\hline
+\textbf{Real: active} & 669 & 35\\ \hline
+\textbf{Real: churn}  & 87  & 201\\ \hline
+\end{tabular}
+\end{table}
+
+The business reading confirms the ranking quality measured by the
+\gls{roc}-\gls{auc}: when clients are sorted by predicted risk, the low-risk
+segment contains about 5\% real churners, the medium segment about 27\%, and
+the high-risk segment about \textbf{96\%} --- exactly the list a retention
+team should call first (Figure~\ref{fig:casestudy-proof}).
+
+\begin{figure}[H]\centering
+  \includegraphics[width=\textwidth,keepaspectratio]{casestudy_proof}
+  \caption{Case-study results: real metrics and risk segments}
+  \label{fig:casestudy-proof}
+\end{figure}
+
+\subsection{Consuming the Model from Outside}
+To close the loop, the deployed churn model was called from an external
+\gls{http} client (Postman) using a per-deployment \gls{api} key, exactly as a
+third-party retention application would (Listing~\ref{lst:churn-call}). The
+call and its latency then appear in the project's Monitoring tab.
+
+\begin{lstlisting}[language=bash,caption={External prediction call against the deployed churn model.},label={lst:churn-call}]
+curl -X POST "https://mlops.firasmahjoubi.app/api/public/predict/<deployment_id>" \
+  -H "Authorization: Bearer mlops_<key>" \
+  -H "Content-Type: application/json" \
+  -d '{"instances": [[3, 41.2, 0.6, 12, 1, 0, ...]]}'
+
+{"predictions": [0.87]}   % churn risk of this client: 87%
+\end{lstlisting}
+
+\subsection{What the Case Study Demonstrates}
+This single use case exercises every layer built in the four sprints:
+\begin{itemize}[leftmargin=1.4em]
+  \item the \textbf{notebook conversion} handled a real, messy notebook
+        (Excel dependencies, \texttt{!pip install}, French text) without
+        manual editing;
+  \item \textbf{autolog} captured all parameters, metrics, and evaluation
+        artifacts with zero code changes;
+  \item the \textbf{leaderboard} exposed the metrics above and flagged the
+        champion run;
+  \item \textbf{multi-framework serving} detected the XGBoost booster and
+        materialized a servable file automatically;
+  \item the deployed model answered predictions from the in-platform tester
+        and from an external \gls{http} client through a hashed \gls{api}
+        key, with every call visible in the \textbf{serving telemetry}.
+\end{itemize}
+
+% ---------------------------------------------------------------------------
+\section{Conclusion}
+The platform passed its functional scenarios across all four sprints, and a
+real churn model traveled the full lifecycle --- upload, automatic conversion,
+tracked training (\gls{roc}-\gls{auc} 0.911), registration, deployment, public
+consumption, monitoring --- without a single line of infrastructure code
+written by the data scientist. This is precisely the objective fixed in
+Chapter~\ref{chap:context}.

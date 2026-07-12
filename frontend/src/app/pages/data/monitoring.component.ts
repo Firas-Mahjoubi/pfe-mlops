@@ -66,8 +66,12 @@ import { IconComponent } from '../../shared/ui/icon/icon.component';
             <span><span class="text-ink font-medium">Deployment CPU / RAM</span> — per-pod metrics in the Deployments page</span>
           </li>
           <li class="flex items-start gap-2">
+            <app-icon name="check" className="w-3.5 h-3.5 text-good shrink-0 mt-0.5"></app-icon>
+            <span><span class="text-ink font-medium">Serving monitoring: request volume, error rate, p95 latency, per-deployment &amp; public API usage</span> — each project's <span class="text-ink font-medium">Monitoring</span> tab</span>
+          </li>
+          <li class="flex items-start gap-2">
             <app-icon name="dot" className="w-3.5 h-3.5 text-ink3 shrink-0 mt-0.5"></app-icon>
-            <span class="text-ink3"><span class="text-ink2 font-medium">RPS, p95 latency, drift</span> — planned for v3 via Prometheus + Grafana</span>
+            <span class="text-ink3"><span class="text-ink2 font-medium">Data & concept drift</span> — planned for v3 on top of the prediction telemetry</span>
           </li>
         </ul>
       </div>

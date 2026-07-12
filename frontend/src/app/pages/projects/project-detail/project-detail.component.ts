@@ -1602,7 +1602,7 @@ interface ExperimentGroup {
           </div>
         }
 
-        @case ('monitoring') {
+        @case ('insights') {
           <div class="space-y-5">
             <!-- A. Health verdict -->
             @if (modelHealth(); as health) {
@@ -1627,8 +1627,8 @@ interface ExperimentGroup {
             }
 
             <!-- B. KPI tiles -->
-            <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-              @for (kpi of monitoringKpis(); track kpi.label) {
+            <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+              @for (kpi of insightsKpis(); track kpi.label) {
                 <div class="bg-card border border-line rounded-lg p-4">
                   <div class="text-[10.5px] font-semibold tracking-[0.08em] uppercase text-ink3">{{ kpi.label }}</div>
                   <div class="mt-1.5 text-[20px] font-semibold tracking-tight leading-none"
@@ -1695,8 +1695,34 @@ interface ExperimentGroup {
                 </div>
               }
             </div>
+          </div>
+        }
 
-            <!-- E. Serving telemetry -->
+        @case ('monitoring') {
+          <div class="space-y-5">
+            <!-- A. Serving status -->
+            <div class="rounded-lg border px-5 py-4 flex items-start gap-3"
+                 [class]="readyDeployment() ? 'bg-good/5 border-good/30' : 'bg-card border-line'">
+              <div class="mt-0.5 shrink-0">
+                @if (readyDeployment()) { <span class="text-good text-[18px]">●</span> }
+                @else { <app-icon name="activity" className="w-4.5 h-4.5 text-ink3"></app-icon> }
+              </div>
+              <div>
+                <div class="text-[14px] font-semibold" [class]="readyDeployment() ? 'text-good' : 'text-ink2'">
+                  @if (readyDeployment(); as dep) { Serving LIVE }
+                  @else { No model being served }
+                </div>
+                <div class="text-[12.5px] text-ink2 mt-0.5">
+                  @if (readyDeployment(); as dep) {
+                    <span class="mono">{{ dep.inference_service_name }}</span> answers predictions from the tester and the public API.
+                  } @else {
+                    Deploy a model version from the Models tab; its live usage will be monitored here.
+                  }
+                </div>
+              </div>
+            </div>
+
+            <!-- B. Serving telemetry -->
             <div class="bg-card border border-line rounded-lg p-5">
               <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
                 <div>
@@ -1772,6 +1798,69 @@ interface ExperimentGroup {
                 </div>
               }
             </div>
+
+            @if (servingStats && servingStats.total > 0) {
+              <!-- C. Traffic by origin -->
+              <div class="bg-card border border-line rounded-lg p-5">
+                <div class="text-[13px] font-semibold text-ink mb-1">Traffic by origin</div>
+                <div class="text-[11.5px] text-ink3 mb-3">Who is calling the models: the in-platform tester or external clients through the public API</div>
+                <div class="grid grid-cols-2 gap-3">
+                  @for (src of servingStats.by_source; track src.source) {
+                    <div class="rounded-lg border border-line bg-white/[0.02] p-3.5">
+                      <div class="text-[10.5px] font-semibold tracking-[0.08em] uppercase text-ink3">{{ sourceLabel(src.source) }}</div>
+                      <div class="mt-1 text-[18px] font-semibold text-ink leading-none">{{ src.count }}</div>
+                      <div class="mt-1 text-[10.5px]" [class]="src.errors > 0 ? 'text-bad' : 'text-ink3'">
+                        {{ src.errors > 0 ? src.errors + ' failed' : 'no errors' }}
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
+
+              <!-- D. Per-deployment breakdown -->
+              @if (servingStats.deployments.length > 0) {
+                <div class="bg-card border border-line rounded-lg p-5">
+                  <div class="text-[13px] font-semibold text-ink mb-1">Per-deployment breakdown</div>
+                  <div class="text-[11.5px] text-ink3 mb-3">Usage and behavior of each deployed model in the selected window</div>
+                  <div class="overflow-x-auto">
+                    <table class="w-full text-[12px]">
+                      <thead>
+                        <tr class="text-left text-[10.5px] font-semibold tracking-[0.08em] uppercase text-ink3 border-b border-line">
+                          <th class="py-2 pr-3">Deployment</th>
+                          <th class="py-2 pr-3">Status</th>
+                          <th class="py-2 pr-3 text-right">Requests</th>
+                          <th class="py-2 pr-3 text-right">Error rate</th>
+                          <th class="py-2 pr-3 text-right">Avg latency</th>
+                          <th class="py-2 pr-3 text-right">p95</th>
+                          <th class="py-2 text-right">Last used</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (dep of servingStats.deployments; track dep.deployment_id) {
+                          <tr class="border-b border-line/50">
+                            <td class="py-2.5 pr-3 mono text-ink">{{ dep.name }}</td>
+                            <td class="py-2.5 pr-3">
+                              <span class="text-[9.5px] px-1.5 py-0.5 rounded-full font-medium"
+                                    [class]="dep.status === 'READY' ? 'bg-good/15 text-good' : 'bg-white/[0.06] text-ink3'">
+                                {{ dep.status }}
+                              </span>
+                            </td>
+                            <td class="py-2.5 pr-3 text-right text-ink">{{ dep.count }}</td>
+                            <td class="py-2.5 pr-3 text-right"
+                                [class]="dep.error_rate > 0.05 ? 'text-bad' : dep.error_rate > 0 ? 'text-amber-300' : 'text-good'">
+                              {{ (dep.error_rate * 100).toFixed(1) }}%
+                            </td>
+                            <td class="py-2.5 pr-3 text-right text-ink2">{{ dep.avg_latency_ms ?? '—' }} ms</td>
+                            <td class="py-2.5 pr-3 text-right text-ink2">{{ dep.p95_latency_ms ?? '—' }} ms</td>
+                            <td class="py-2.5 text-right text-ink3">{{ dep.last_at ? timeAgo(dep.last_at) : '—' }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              }
+            }
           </div>
         }
         @case ('deployments') {
@@ -2456,13 +2545,16 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
     { id: 'pipelines', label: 'Pipelines' },
     { id: 'models', label: 'Models' },
     { id: 'deployments', label: 'Deployments' },
+    { id: 'insights', label: 'Insights' },
     { id: 'monitoring', label: 'Monitoring' },
   ];
 
   selectTab(id: string): void {
     this.activeTab = id;
-    if (id === 'monitoring') {
+    if (id === 'insights') {
       this.buildEvolutionChart();
+    }
+    if (id === 'monitoring') {
       this.loadServing();
     }
   }
@@ -2607,7 +2699,7 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
     };
   }
 
-  monitoringKpis(): { label: string; value: string; sub: string; tone: 'good' | 'bad' | 'neutral' }[] {
+  insightsKpis(): { label: string; value: string; sub: string; tone: 'good' | 'bad' | 'neutral' }[] {
     const kpis: { label: string; value: string; sub: string; tone: 'good' | 'bad' | 'neutral' }[] = [];
     const series = this.evolutionRuns();
 
@@ -2656,14 +2748,15 @@ export class ProjectDetailComponent implements OnInit, OnDestroy, AfterViewCheck
       });
     }
 
-    const ready = this.deployments.find((d) => d.status === 'READY');
-    kpis.push({
-      label: 'Serving',
-      value: ready ? 'LIVE' : 'none',
-      sub: ready ? ready.inference_service_name : 'no active deployment',
-      tone: ready ? 'good' : 'neutral',
-    });
     return kpis;
+  }
+
+  readyDeployment() {
+    return this.deployments.find((d) => d.status === 'READY') ?? null;
+  }
+
+  sourceLabel(source: string): string {
+    return source === 'public' ? 'Public API' : 'In-app tester';
   }
 
   fmtDurationMs(ms: number): string {

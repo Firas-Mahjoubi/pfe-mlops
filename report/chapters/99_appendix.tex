@@ -35,6 +35,8 @@ GET  & \texttt{/pipelines/\{run\_id\}/logs} & Live logs of a run\\ \hline
 GET  & \texttt{/pipelines/\{run\_id\}/error} & Captured failure reason of a run\\ \hline
 GET  & \texttt{/experiments/project/\{id\}} & Runs of a project with metrics\\ \hline
 GET  & \texttt{/experiments/compare} & Compare metrics across runs\\ \hline
+GET  & \texttt{/experiments/run/\{id\}/artifacts} & List a run's logged artifacts (files, folders)\\ \hline
+GET  & \texttt{/experiments/run/\{id\}/artifact} & Stream one artifact (images render inline)\\ \hline
 \end{tabularx}
 \end{table}
 
@@ -58,6 +60,7 @@ DELETE & \texttt{/deployments/\{id\}/api-keys/ \{kid\}} & Revoke a key\\ \hline
 POST & \texttt{/api/public/predict/\{id\}} & Prediction for external clients\\ \hline
 \multicolumn{3}{|l|}{\cellcolor{primary!12}\textbf{Monitoring and administration}}\\ \hline
 GET  & \texttt{/cluster/metrics} & Cluster and per-pod resource metrics\\ \hline
+GET  & \texttt{/monitoring/project/\{id\}/ serving} & Serving KPIs: volume, error rate, latency, timeline\\ \hline
 GET  & \texttt{/admin/users} & List all accounts (admin)\\ \hline
 PATCH / DELETE & \texttt{/admin/users/\{id\}} & Update role/status or delete (admin)\\ \hline
 POST & \texttt{/admin/users/\{id\}/purge} & Purge a user's resources (admin)\\ \hline
@@ -65,44 +68,3 @@ GET  & \texttt{/admin/overview} & Platform-wide statistics (admin)\\ \hline
 \end{tabularx}
 \end{table}
 
-%==============================================================================
-\chapter{Continuous Deployment Pipeline}
-\label{app:cicd}
-
-Every push to the main branch triggers a GitHub Actions workflow that builds and
-deploys the platform. The workflow authenticates to Azure, builds the backend and
-frontend container images with registry-backed layer caching, pushes them to
-\gls{acr}, and upgrades the Helm release on the \gls{aks} cluster. A concurrency
-group cancels any in-progress run when a newer commit arrives, so the cluster
-always converges on the latest version of the main branch.
-
-\begin{lstlisting}[caption={Excerpt of the GitHub Actions deployment workflow.},label={lst:cicd}]
-name: Build and deploy to AKS
-on:
-  push:
-    branches: [main]
-  workflow_dispatch:
-
-env:
-  ACR_LOGIN_SERVER: acrmlopspfedemo.azurecr.io
-  AKS_CLUSTER: aks-mlops-pfe
-  HELM_RELEASE: mlops
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    concurrency:
-      group: deploy-main
-      cancel-in-progress: true
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      # ... az login, ACR auth ...
-      # build + push backend and frontend images (cache-from/to ACR)
-      # helm upgrade --install with the new image tags
-\end{lstlisting}
-
-The deployment itself is described by a Helm chart that templates every
-Kubernetes resource of the platform (backend, frontend, database, object store,
-tracking server, tunnel agent), so the same chart deploys the full stack to the
-local development cluster and to \gls{aks} with only a values file changing.

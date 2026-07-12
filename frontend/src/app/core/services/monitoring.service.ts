@@ -10,6 +10,24 @@ export interface ServingBucket {
   avg_latency_ms: number | null;
 }
 
+export interface ServingSource {
+  source: string; // 'app' (in-platform tester) | 'public' (public API)
+  count: number;
+  errors: number;
+}
+
+export interface ServingDeploymentRow {
+  deployment_id: string;
+  name: string;
+  status: string;
+  count: number;
+  errors: number;
+  error_rate: number;
+  avg_latency_ms: number | null;
+  p95_latency_ms: number | null;
+  last_at: string | null;
+}
+
 export interface ServingStats {
   window_hours: number;
   bucket_unit: 'hour' | 'day';
@@ -20,6 +38,8 @@ export interface ServingStats {
   p95_latency_ms: number | null;
   last_at: string | null;
   buckets: ServingBucket[];
+  by_source: ServingSource[];
+  deployments: ServingDeploymentRow[];
 }
 
 @Injectable({ providedIn: 'root' })

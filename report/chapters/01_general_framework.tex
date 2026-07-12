@@ -1,0 +1,284 @@
+%==============================================================================
+%  CHAPTER 1 — GENERAL FRAMEWORK
+%==============================================================================
+\chapter{General Framework}
+\label{chap:context}
+
+\section{Introduction}
+This chapter sets the frame of the project. It first presents the host
+organization, then the framing of the project itself: its context, the problem
+it answers, and the proposed solution. It closes with the working methodology,
+the planning, and the tools used to manage the work.
+
+% ---------------------------------------------------------------------------
+\section{Presentation of the Host Organization}
+\label{sec:host-org}
+
+\subsection{Company Overview}
+\textbf{INSOMEA} (INSOMEA Computer Solutions), a Beyon Solutions company, is a
+Microsoft Cloud Gold Partner and one of the leading cloud IT solution providers
+in the Middle East and Africa (MEA) region. Founded in 2016, it serves local,
+regional, and international organizations and specializes in Microsoft~365,
+Microsoft Azure, cybersecurity, and professional training.
+
+The company operates from six offices across Tunisia, Bahrain, France, Algeria,
+Morocco, and the Ivory Coast, with a team of more than fifty employees serving
+over five hundred customers.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[height=1.9cm,keepaspectratio]{insomea}
+  \caption{INSOMEA logo}
+  \label{fig:insomea-logo}
+\end{figure}
+
+\subsection{Organizational Structure}
+INSOMEA is organized around three delivery teams, one per activity pillar,
+supported by a training center. This project was carried out inside the
+\textbf{Cloud \& Infrastructure} team, as shown in
+Figure~\ref{fig:org-structure}.
+
+\begin{figure}[H]\centering
+\begin{tikzpicture}[node distance=0.55cm and 0.45cm]
+  \node[layernode,minimum width=5.2cm] (dir) {INSOMEA --- Management};
+  \node[stepnode,below left=0.7cm and 2.6cm of dir.south,minimum width=3.1cm] (mw) {Modern\\Workplace};
+  \node[stepnode,below=0.7cm of dir,minimum width=3.1cm] (sec) {Security};
+  \node[stepnode,below right=0.7cm and 2.6cm of dir.south,minimum width=3.1cm,draw=diaggreen!70,fill=diaggreen!10] (cloud) {Cloud \&\\Infrastructure};
+  \node[storenode,below=0.55cm of sec,minimum width=3.4cm] (tc) {INSOMEA\\Training Center};
+  \node[stagenode,below=0.55cm of cloud,fill=diaggreen!12,draw=diaggreen!60,minimum width=3.1cm] (pfe) {This PFE\\(6 months)};
+  \foreach \t in {mw,sec,cloud}{ \draw[flowarrow] (dir.south) -- (\t.north); }
+  \draw[flowarrow,draw=diagamber!75] (sec.south) -- (tc.north);
+  \draw[flowarrow,draw=diaggreen!70] (cloud.south) -- (pfe.north);
+\end{tikzpicture}
+\caption{Organizational structure and position of the project}
+\label{fig:org-structure}
+\end{figure}
+
+\subsection{Activities and Areas of Expertise}
+INSOMEA delivers IT solutions built on Microsoft technologies, organized around
+three pillars:
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{Modern Workplace}: collaboration and productivity with
+        Microsoft~365 and Teams, including adoption and change management;
+  \item \textbf{Security}: identity and access management, information
+        protection and governance, threat protection;
+  \item \textbf{Cloud \& Infrastructure}: Microsoft Azure, datacenter, DevOps,
+        and application development and integration --- the team hosting this
+        project.
+\end{itemize}
+The \textbf{INSOMEA Training Center} completes the offer with a broad catalog
+of Microsoft certification courses delivered by Microsoft Certified Trainers.
+
+\subsection{Key Partnerships}
+INSOMEA's central partnership is with \textbf{Microsoft}: a Microsoft Cloud
+Partner since 2017, the company has been named Microsoft \emph{Partner of the
+Year} on five occasions, in Bahrain (2020) and in Tunisia (2021 and 2022)
+among them, and holds more than fifteen Gold competencies together with eight
+advanced specializations. As part of the \textbf{Beyon Solutions} group, it
+also benefits from a regional network of technology companies across the MEA
+region.
+
+% ---------------------------------------------------------------------------
+\section{Project Framing}
+\label{sec:framing}
+
+\subsection{Context and Problem Statement}
+\label{sec:critique}
+\gls{devops} unified software development and operations around automation and
+\gls{cicd}. \gls{mlops} extends these principles to machine learning, where a
+system is defined not by code alone but by \textbf{code}, \textbf{data}, and
+\textbf{model} together: any of the three can change independently and break
+the system. The resulting lifecycle forms a loop, shown in
+Figure~\ref{fig:mlops-lifecycle}: upload, train, track, register, deploy,
+serve, consume, monitor.
+
+\begin{figure}[H]\centering
+\begin{tikzpicture}
+  \foreach \name [count=\n from 0] in {Upload,Train,Track,Register,Deploy,Serve,Consume,Monitor}{
+    \node[stagenode] (s\n) at ({4.7*cos(90-\n*45)},{3.1*sin(90-\n*45)}) {\name};
+  }
+  \foreach \a/\b in {0/1,1/2,2/3,3/4,4/5,5/6,6/7,7/0}{
+    \draw[flowarrow] (s\a) to[bend right=11] (s\b);
+  }
+  \node[align=center,font=\small\itshape,text=diagblue] at (0,0)
+    {The end-to-end\\MLOps lifecycle};
+\end{tikzpicture}
+\caption{The end-to-end \gls{mlops} lifecycle automated by the platform}
+\label{fig:mlops-lifecycle}
+\end{figure}
+
+In most teams, this lifecycle is still carried out by hand. A data scientist
+trains a model in a notebook on a personal machine; results are recorded
+informally, in the notebook output or a spreadsheet; the trained model is
+shared as a file; an engineer wraps it in a web service through custom scripts;
+and monitoring, if any, is limited to checking that the service responds.
+
+This manual workflow suffers from well-known weaknesses:
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{No reproducibility}: without a record of the exact code, data,
+        and parameters, results cannot be reproduced;
+  \item \textbf{Lost experiments}: informal tracking makes model comparison
+        unreliable;
+  \item \textbf{``Works on my machine''}: environment differences cause
+        failures that are hard to diagnose;
+  \item \textbf{Slow, fragile deployment}: hand-written scripts must be
+        repeated for every model;
+  \item \textbf{No isolation, no observability}: workloads share one machine
+        and their health is invisible.
+\end{itemize}
+
+The problem of this project can therefore be summarized in one question:
+\emph{how can a data scientist go from a notebook to a live, consumable
+prediction service, without writing a single line of infrastructure code?}
+
+\subsection{Proposed Solution}
+\label{sec:solution}
+The proposed solution is a self-hosted \gls{mlops} platform driven entirely
+from a web browser. The user signs in, creates a \textbf{project}, uploads
+code (\texttt{.py}, \texttt{.ipynb}, or \texttt{.zip}) and a dataset, and
+triggers a \textbf{training pipeline} that runs in an isolated pod on a
+\gls{k8s} cluster. Every run's metrics, parameters, and artifacts are captured
+automatically.
+
+From there, the user \textbf{registers} and promotes model versions
+(Staging / Production / Archived), \textbf{deploys} a version as a live
+prediction service in one click, tests it from the interface, and exposes it
+to external applications through secured public \gls{api} keys. Dashboards,
+serving telemetry, diagnostics, and an administration area complete the
+platform. Figure~\ref{fig:solution-pipeline} summarizes this flow.
+
+\begin{figure}[H]\centering
+  \includegraphics[width=\textwidth,keepaspectratio]{solution_pipeline}
+  \caption{Proposed solution: from upload to a live model with a public API}
+  \label{fig:solution-pipeline}
+\end{figure}
+
+The platform runs on a real Kubernetes cluster and ships every change to a
+public URL through an automated \gls{cicd} pipeline. It is assembled entirely
+from open-source components; the study of existing platforms that motivates
+this choice is the subject of Chapter~\ref{chap:study}.
+
+% ---------------------------------------------------------------------------
+\section{Methodology and Planning}
+\label{sec:scrum}
+
+\subsection{Scrum Methodology}
+The platform is built incrementally from independent but connected
+capabilities, so an \textbf{Agile} approach was preferred over a sequential
+process, and \textbf{Scrum}~\cite{scrum_guide} was adopted. Scrum organizes
+work into fixed-length \emph{sprints}, each producing a potentially shippable
+increment, around three artifacts (product backlog, sprint backlog, increment)
+and a set of events (planning, sprint, review, retrospective).
+Figure~\ref{fig:scrum} illustrates the process.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.9\textwidth,keepaspectratio]{scrum}
+  \caption{The Scrum process: from product backlog to shippable increment}
+  \label{fig:scrum}
+\end{figure}
+
+The Scrum roles were held as follows:
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{\gls{po}}: Mr.\ Amine Gonji (company supervisor, INSOMEA),
+        prioritizing the backlog and validating each increment;
+  \item \textbf{\gls{sm}}: Mr.\ Ben Mardes Achref (academic supervisor),
+        facilitating the process and removing impediments;
+  \item \textbf{Development Team}: the author, responsible for analysis,
+        design, implementation, and testing, with technical guidance from
+        Mr.\ Benarous Abderrahmen.
+\end{itemize}
+
+\subsection{Sprint Organization}
+The work was delivered over \textbf{four sprints in six months}, each ending
+with a demonstrable, deployed increment reviewed with the supervisors
+(Figure~\ref{fig:methodology-timeline}).
+
+\begin{figure}[H]\centering
+  \includegraphics[width=\textwidth,keepaspectratio]{sprints}
+  \caption{The four sprints and their themes}
+  \label{fig:methodology-timeline}
+\end{figure}
+
+\subsection{Product Backlog}
+\label{sec:backlog}
+The product backlog (Table~\ref{tab:backlog}) gathers all desired capabilities
+as user stories, ordered by priority; story points estimate the relative
+effort.
+
+\begin{table}[H]\centering
+\caption{Product backlog}\label{tab:backlog}
+\renewcommand{\arraystretch}{1.15}
+\small
+\begin{tabularx}{\textwidth}{|c|X|c|c|}
+\hline
+\rowcolor{primary!15}
+\textbf{\#} & \textbf{User story} & \textbf{Prio.} & \textbf{Pts}\\
+\hline
+1  & As a user, I want to sign up and sign in so that my work is private.        & High & 5\\ \hline
+2  & As a user, I want to create and manage projects to organize my work.        & High & 5\\ \hline
+3  & As a user, I want to upload code and a dataset through the browser.         & High & 5\\ \hline
+4  & As a user, I want to trigger a training run on the cluster.                 & High & 8\\ \hline
+5  & As a user, I want metrics and artifacts captured automatically.             & High & 5\\ \hline
+6  & As a user, I want to watch the live logs of a running pipeline.             & Med  & 3\\ \hline
+7  & As a user, I want to browse and compare my experiment runs.                 & Med  & 3\\ \hline
+8  & As a user, I want to register and version trained models.                   & High & 5\\ \hline
+9  & As a user, I want to promote a model between Staging/Production/Archived.   & High & 3\\ \hline
+10 & As a user, I want to deploy a registered model as a live service.           & High & 8\\ \hline
+11 & As a user, I want to send inputs and get predictions from the UI.           & High & 5\\ \hline
+12 & As a user, I want a dashboard of cluster and per-pod metrics.               & Med  & 5\\ \hline
+13 & As a user, I want public API keys so external apps can call my model.       & Med  & 5\\ \hline
+14 & As a user, I want clear diagnostics when an uploaded script fails.          & Med  & 5\\ \hline
+15 & As an administrator, I want to manage users and oversee the platform.       & Med  & 5\\ \hline
+\end{tabularx}
+\end{table}
+
+The split into sprints is deliberate: each sprint delivers a complete vertical
+slice that the previous one makes possible. Sprint~1 establishes identity and
+ownership; Sprint~2 produces tracked training runs; Sprint~3 turns them into
+registered, deployed models; Sprint~4 makes the whole lifecycle observable,
+externally consumable, and administrable.
+
+\subsection{Project Schedule}
+The project ran over six months, from 12 January 2026, opening with a framing
+and state-of-the-art phase, followed by the four sprints, with the report
+written in parallel (Table~\ref{tab:schedule}).
+
+\begin{table}[H]\centering
+\renewcommand{\arraystretch}{1.2}
+\caption{Project schedule}\label{tab:schedule}
+\small
+\begin{tabularx}{\textwidth}{|>{\bfseries}l|c|c|X|}
+\hline
+\rowcolor{primary!15}
+\textbf{Phase} & \textbf{Period} & \textbf{Duration} & \textbf{Main objective}\\
+\hline
+Framing \& SOTA & 12 Jan -- 01 Feb & 3 weeks & Framing, state of the art, environment setup\\ \hline
+Sprint 1 & 02 Feb -- 01 Mar & 4 weeks & Authentication and project management\\ \hline
+Sprint 2 & 02 Mar -- 05 Apr & 5 weeks & Training pipeline and experiment tracking\\ \hline
+Sprint 3 & 06 Apr -- 03 May & 4 weeks & Model registry, deployment, and prediction\\ \hline
+Sprint 4 & 04 May -- 14 Jun & 6 weeks & Observability, public API, and administration\\ \hline
+Report writing & 12 Jan -- 11 Jul & Continuous & Drafting and revising in parallel\\ \hline
+\end{tabularx}
+\end{table}
+
+\subsection{Management and Communication Tools}
+The project was managed with lightweight, traceable tools:
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{Git and GitHub} for version control; every increment is a
+        series of commits on the main branch, continuously deployed;
+  \item \textbf{Visual Studio Code} as the development environment;
+  \item \textbf{a work journal and weekly reports} (journal de bord, bilans)
+        documenting progress, decisions, and blockers throughout the six
+        months;
+  \item \textbf{regular reviews} with the company and academic supervisors at
+        the end of each sprint.
+\end{itemize}
+
+% ---------------------------------------------------------------------------
+\section{Conclusion}
+This chapter presented the host organization, framed the problem, one
+question: from a notebook to a live prediction service with no infrastructure
+code, introduced the proposed platform, and set the Scrum methodology, the
+backlog, and the schedule that structure the rest of this report. The next
+chapter analyzes the business objectives and studies the technical landscape.

@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.database import get_db
+from app.models.deployment import Deployment
 from app.models.prediction_log import PredictionLog
 from app.models.project import Project
 from app.models.user import User
@@ -67,6 +68,35 @@ async def project_serving_stats(
         .order_by(bucket_col)
     )).all()
 
+    # Traffic split by origin: in-app tester vs public API.
+    source_rows = (await db.execute(
+        select(
+            base.c.source,
+            func.count(base.c.id),
+            func.sum(is_error),
+        )
+        .group_by(base.c.source)
+        .order_by(base.c.source)
+    )).all()
+
+    # Per-deployment breakdown, joined with the deployment record so the
+    # frontend can show the service name and current status.
+    dep_rows = (await db.execute(
+        select(
+            base.c.deployment_id,
+            Deployment.inference_service_name,
+            Deployment.status,
+            func.count(base.c.id),
+            func.sum(is_error),
+            func.avg(base.c.latency_ms),
+            func.percentile_cont(0.95).within_group(base.c.latency_ms),
+            func.max(base.c.created_at),
+        )
+        .join(Deployment, Deployment.id == base.c.deployment_id)
+        .group_by(base.c.deployment_id, Deployment.inference_service_name, Deployment.status)
+        .order_by(func.count(base.c.id).desc())
+    )).all()
+
     return {
         "window_hours": hours,
         "bucket_unit": unit,
@@ -84,5 +114,23 @@ async def project_serving_stats(
                 "avg_latency_ms": round(float(r[3]), 1) if r[3] is not None else None,
             }
             for r in rows
+        ],
+        "by_source": [
+            {"source": r[0], "count": r[1], "errors": int(r[2] or 0)}
+            for r in source_rows
+        ],
+        "deployments": [
+            {
+                "deployment_id": r[0],
+                "name": r[1],
+                "status": r[2].value if hasattr(r[2], "value") else r[2],
+                "count": r[3],
+                "errors": int(r[4] or 0),
+                "error_rate": round((int(r[4] or 0)) / r[3], 4) if r[3] else 0.0,
+                "avg_latency_ms": round(float(r[5]), 1) if r[5] is not None else None,
+                "p95_latency_ms": round(float(r[6]), 1) if r[6] is not None else None,
+                "last_at": r[7].isoformat() if r[7] else None,
+            }
+            for r in dep_rows
         ],
     }

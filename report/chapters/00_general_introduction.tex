@@ -53,9 +53,10 @@ Concretely, the project pursues five objectives:
   \item \textbf{Open models to the outside}: let external applications consume a
         deployed model through a secured public \gls{api}, making each model a
         reusable web service.
-  \item \textbf{Operate the platform}: provide observability of the cluster and
-        the runs, clear failure diagnostics, and an administration area for user
-        and resource management.
+  \item \textbf{Operate the platform}: provide observability of the cluster, the
+        runs, and the served models (per-prediction telemetry with volume,
+        error-rate, and latency indicators), clear failure diagnostics, and an
+        administration area for user and resource management.
 \end{enumerate}
 
 The work was carried out over six months within INSOMEA's cloud engineering
@@ -67,20 +68,22 @@ supervisors.
 The remainder of this report is organized as follows:
 
 \begin{itemize}[leftmargin=1.4em]
-  \item \textbf{Chapter~1, General Presentation} introduces the host organization,
-        studies the existing situation and its limitations, states the problem,
-        describes the adopted solution, presents the Scrum methodology, and sets
-        up the hardware and software environment, including the enabling
-        technologies that make up the platform's stack.
-  \item \textbf{Chapter~2, Planning and Capture of Needs} analyzes the needs
-        (actors, functional and non-functional requirements, and the use-case
-        model), presents the project management with Scrum (team, product backlog,
-        and sprint plan), and describes the application and overall project
-        architecture.
-  \item \textbf{Chapters~3 to~6} each document the study and implementation of one
-        sprint, following the same structure: sprint backlog, analysis and
-        functional specification, design, implementation, and testing and
-        validation.
+  \item \textbf{Chapter~1, General Framework} presents the host organization,
+        frames the context, the problem, and the proposed solution, and sets
+        the Scrum methodology, the product backlog, and the schedule.
+  \item \textbf{Chapter~2, Business Understanding and Technical Study} states
+        the business and system objectives, analyzes the existing workflow on
+        the \gls{mlops} maturity scale, studies the existing platforms, and
+        selects the technologies.
+  \item \textbf{Chapter~3, System Design} designs the system: actors and use
+        cases, logical and physical architecture, the training and serving
+        pipelines, the sequence diagrams, and the data model.
+  \item \textbf{Chapter~4, Implementation and Deployment} details the
+        realization sprint by sprint, then the continuous-deployment chain and
+        the execution environments.
+  \item \textbf{Chapter~5, Validation and Results} consolidates the functional
+        validation and demonstrates the platform end to end on a real telecom
+        churn use case.
   \item \textbf{General Conclusion} summarizes the results achieved, the skills
         gained, the limitations of the current system, and directions for future
         work.

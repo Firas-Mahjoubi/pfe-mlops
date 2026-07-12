@@ -1,0 +1,299 @@
+%==============================================================================
+%  CHAPTER 2 — BUSINESS UNDERSTANDING AND TECHNICAL STUDY
+%==============================================================================
+\chapter{Business Understanding and Technical Study}
+\label{chap:study}
+
+\section{Introduction}
+Before designing the platform, this chapter clarifies \emph{what} it must
+achieve and \emph{on what} it should be built. It states the business
+objectives and the system objectives that answer them, analyzes the existing
+manual workflow against the \gls{mlops} maturity scale, studies the platforms
+that already address this space, and closes with the benchmark of technologies
+selected to build the solution.
+
+% ---------------------------------------------------------------------------
+\section{Business Objectives}
+\label{sec:bo}
+Six business objectives were fixed with the host company:
+\begin{enumerate}[leftmargin=1.6em]
+  \item \textbf{Train without owning infrastructure}: a data scientist should
+        use cluster compute without any cloud or Kubernetes knowledge;
+  \item \textbf{Never lose an experiment}: every run must be recorded and
+        comparable;
+  \item \textbf{Choose the best model objectively}: model selection must rest
+        on evaluation metrics, not memory or habit;
+  \item \textbf{Ship a model like software}: versioned, promoted, deployed in
+        a repeatable way;
+  \item \textbf{Let external applications consume models}: a deployed model
+        must be usable by any website or service;
+  \item \textbf{Operate and trust the system}: usage, health, and failures
+        must be visible and explainable.
+\end{enumerate}
+
+% ---------------------------------------------------------------------------
+\section{System Objectives}
+\label{sec:so}
+Each business objective maps to a delivered system capability, summarized in
+Figure~\ref{fig:bodso}.
+
+\begin{figure}[H]\centering
+  \includegraphics[width=\textwidth,keepaspectratio]{bodso}
+  \caption{From business objectives to delivered system capabilities}
+  \label{fig:bodso}
+\end{figure}
+
+Concretely: any \texttt{.py} / \texttt{.ipynb} / \texttt{.zip} runs in an
+isolated, resource-limited Kubernetes pod (1); MLflow autolog captures
+parameters, metrics, and artifacts of every run with zero code changes (2); a
+leaderboard groups runs by model family and ranks them on evaluation metrics
+only (3); the registry versions and stages models, and one click deploys a
+version as a KServe \texttt{InferenceService} (4); a public endpoint secured
+by hashed \gls{api} keys serves external applications without a platform
+account (5); and serving telemetry, model-evolution \glspl{kpi}, failure
+diagnostics, and an administration area make the system operable (6).
+
+% ---------------------------------------------------------------------------
+\section{Analysis of the Existing Workflow}
+\label{sec:existing}
+Google's reference architecture for \gls{mlops}~\cite{google_mlops} classifies
+organizations into three maturity levels, a useful yardstick for evaluating
+both the current situation and the target:
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{Level 0, manual process}: every step is manual and
+        script-driven, with a complete disconnection between the data
+        scientists who produce models and the engineers who serve them. The
+        notebook-on-a-laptop workflow of Chapter~\ref{chap:context} sits
+        squarely at this level.
+  \item \textbf{Level 1, ML pipeline automation}: training is automated as a
+        re-executable pipeline; experiments are tracked; models are versioned
+        in a registry and deployed through a repeatable process.
+  \item \textbf{Level 2, CI/CD pipeline automation}: the pipeline itself is
+        built, tested, and deployed automatically; retraining can be triggered
+        by new data or detected drift.
+\end{itemize}
+The platform built in this project takes a team from level~0 to level~1, and
+part of the way to level~2: the application itself is continuously built and
+deployed through \gls{cicd}, while retraining remains user-triggered
+(Figure~\ref{fig:maturity-ladder}).
+
+\begin{figure}[H]\centering
+\begin{tikzpicture}[
+  lvl/.style={rounded corners=6pt, align=center, text width=3.5cm,
+    minimum height=2.4cm, inner sep=6pt, font=\small, softshadow}]
+  % three maturity levels, left to right, same height
+  \node[lvl, draw=diagslate!40, fill=diagslate!6, text=diagslate] (l0) at (0,0)
+    {{\scriptsize\bfseries LEVEL 0}\\[3pt]{\bfseries Manual process}\\[4pt]
+     {\footnotesize Notebooks, scripts,\\ hand-made deploys}};
+  \node[lvl, draw=diaggreen!65, line width=1.2pt, fill=diaggreen!12, text=diagslate] (l1) at (5,0)
+    {{\scriptsize\bfseries\textcolor{diaggreen!45!black}{LEVEL 1}}\\[3pt]{\bfseries ML pipeline automation}\\[4pt]
+     {\footnotesize Tracked runs, registry,\\ repeatable deploys}};
+  \node[lvl, draw=diagblue!40, dashed, fill=diagblue!4, text=diagslate] (l2) at (10,0)
+    {{\scriptsize\bfseries\textcolor{diagblue}{LEVEL 2}}\\[3pt]{\bfseries CI/CD\\ automation}\\[4pt]
+     {\footnotesize Automated retraining\\ on new data}};
+  \draw[-{Latex[length=2.6mm]}, line width=1pt, draw=diagslate!55] (l0.east) -- (l1.west);
+  \draw[-{Latex[length=2.6mm]}, line width=1pt, draw=diagslate!55] (l1.east) -- (l2.west);
+  % what the platform delivers, annotated below, no rotated text
+  \draw[-{Latex[length=3mm]}, line width=2pt, draw=diaggreen!70] (0,-1.85) -- (5,-1.85);
+  \node[font=\scriptsize\bfseries, text=diaggreen!45!black, anchor=north] at (2.5,-2.05)
+    {This platform: Level 0 $\rightarrow$ Level 1};
+  \draw[-{Latex[length=3mm]}, line width=1.4pt, draw=diagblue!55, dashed] (5,-1.85) -- (10,-1.85);
+  \node[font=\scriptsize, text=diagslate, anchor=north] at (7.5,-2.05)
+    {partially (application via CI/CD)};
+\end{tikzpicture}
+\caption{MLOps maturity ladder and the step delivered by the platform}
+\label{fig:maturity-ladder}
+\end{figure}
+
+% ---------------------------------------------------------------------------
+\section{State of the Art}
+\label{sec:platforms}
+Several commercial and open-source systems already address this space, from
+fully managed cloud services (Amazon SageMaker~\cite{sagemaker}, Google Vertex
+AI~\cite{vertexai}, Azure Machine Learning~\cite{azure_ml}, Databricks) to a
+commercial training platform (AIchor~\cite{aichor}) and an open-source toolkit
+(Kubeflow).
+
+The managed clouds look complete but demand a cloud expert and significant
+setup (accounts, permissions, storage, SDKs) before training a single model;
+they are also closed and locked to one provider. The closest system to this
+project's positioning is \textbf{AIchor}, developed by InstaDeep (a company
+founded in Tunisia): it distributes training workloads on a cluster through a
+GitOps workflow, but its lifecycle \emph{stops at training}, it is a
+proprietary product, and it still requires ``a data scientist with Docker
+skills''.
+
+The platform built here removes these barriers: it covers the \emph{full}
+lifecycle through serving and public consumption by \gls{api} key, is
+assembled entirely from open-source components, and needs nothing more than a
+browser. Table~\ref{tab:capability-matrix} compares the platforms feature by
+feature.
+
+\begin{table}[H]\centering
+\caption{Feature-by-feature capability comparison}
+\label{tab:capability-matrix}
+\renewcommand{\arraystretch}{1.45}
+\footnotesize
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}p{3.15cm}|*{4}{>{\centering\arraybackslash}X|}>{\columncolor{primary!12}\centering\arraybackslash}X|}
+\hline
+\rowcolor{primary!15}
+\textbf{Capability} & \textbf{SageMaker $\cdot$ Vertex $\cdot$ Azure~ML} & \textbf{Data\-bricks} & \textbf{AIchor} & \textbf{Kube\-flow} & \textcolor{primary}{\textbf{This plat\-form}}\\
+\hline
+Full ML lifecycle (train $\to$ deploy $\to$ consume) & \capyes & \cappart & \capno & \cappart & \capyes\\ \hline
+Automatic experiment tracking & \capyes & \capyes & \cappart & \cappart & \capyes\\ \hline
+Model registry \& versioning & \capyes & \capyes & \capno & \cappart & \capyes\\ \hline
+One-click deployment (serving) & \capyes & \cappart & \capno & \cappart & \capyes\\ \hline
+Public \gls{api} for external apps & \cappart & \cappart & \capno & \capno & \capyes\\ \hline
+100\% open-source $\cdot$ no lock-in & \capno & \capno & \capno & \capyes & \capyes\\ \hline
+Browser-only $\cdot$ no Git/Docker & \capno & \cappart & \capno & \capno & \capyes\\ \hline
+\end{tabularx}
+
+\vspace{0.35em}
+{\small \capyes~Full support \quad \cappart~Partial \quad \capno~Not available
+\hfill \textbf{\textcolor{primary}{Only this platform covers every capability.}}}
+\end{table}
+
+% ---------------------------------------------------------------------------
+\section{Technology Benchmark and Selection}
+\label{sec:tech-study}
+For each concern of the platform, an open-source technology was selected; each
+choice, its justification, and its logo follow.
+
+% one centered logo with a numbered "Figure x.y: Name" caption below it
+\newcommand{\techpic}[2]{\par\vspace{2pt}{\centering #1\par\vspace{1pt}%
+  \captionof{figure}{#2}\par}\vspace{6pt}}
+% two logos side by side, each with its own numbered caption
+\newcommand{\techpair}[4]{\par\vspace{2pt}\noindent
+  \begin{minipage}[t]{0.48\linewidth}\centering #1\par\vspace{1pt}\captionof{figure}{#2}\end{minipage}\hfill
+  \begin{minipage}[t]{0.48\linewidth}\centering #3\par\vspace{1pt}\captionof{figure}{#4}\end{minipage}\par\vspace{6pt}}
+
+\paragraph{Containerization and orchestration: Docker and Kubernetes.}
+Containers~\cite{docker_docs} package an application with its exact
+dependencies, and \gls{k8s}~\cite{kubernetes_docs} orchestrates them at scale.
+Kubernetes is not only the deployment target but a core \emph{feature} of the
+product: every training job and every deployed model runs in its own
+resource-limited pod, which gives the platform isolation and elasticity. The
+platform runs on \gls{aks} in production and on KinD locally, with no code
+changes.
+\techpic{\includegraphics[height=18mm,keepaspectratio]{kubernetes}}{Kubernetes}
+
+\paragraph{Pipeline orchestration: Kubeflow Pipelines and Argo Workflows.}
+\gls{kfp}~\cite{kubeflow_pipelines} expresses a training workflow as a small
+Python graph compiled into Argo Workflows~\cite{argo_workflows}, which runs
+each step as an isolated pod with scheduling, retries, and log capture handled
+by Argo. The backend submits one pipeline per run and follows its progress
+through the \gls{kfp} \gls{api}, which is also how live logs reach the
+browser. Apache Airflow was considered but targets scheduled data workflows
+rather than on-demand, per-user \gls{ml} jobs on Kubernetes.
+\techpair{\includegraphics[height=17mm,keepaspectratio]{kubeflow}}{Kubeflow Pipelines}%
+  {\includegraphics[height=17mm,keepaspectratio]{argo}}{Argo Workflows}
+
+\paragraph{Experiment tracking and registry: MLflow.}
+\textbf{MLflow}~\cite{mlflow_docs} records parameters, metrics, and artifacts
+of a run through a single \texttt{mlflow.autolog()} call, and provides a
+built-in \textbf{Model Registry} with Staging / Production / Archived stages.
+The platform provisions one MLflow experiment per project and mirrors registry
+state in its own database so the interface stays responsive.
+\techpic{\includegraphics[height=17mm,keepaspectratio]{mlflow}}{MLflow}
+
+\paragraph{Model serving: KServe.}
+\textbf{KServe}~\cite{kserve_docs} turns a declarative
+\texttt{InferenceService} resource into a running Deployment, Service, and
+Ingress backed by a framework-specific model server, used here in
+\textbf{RawDeployment} mode. Deploying a model thus reduces to creating a
+single Kubernetes resource pointing at the model artifact in object storage.
+Seldon Core offers similar capabilities but with a heavier operational
+footprint for a single-team platform.
+\techpic{\includegraphics[height=19mm,keepaspectratio]{kserve}}{KServe}
+
+\paragraph{Object storage: MinIO.}
+\textbf{MinIO}~\cite{minio_docs} is an \gls{s3}-compatible object store
+deployed inside the cluster. It holds uploaded code, datasets, and all MLflow
+artifacts, and is a drop-in for the \gls{s3} \gls{api} that MLflow, KServe,
+and the AWS SDK expect.
+\techpic{\includegraphics[height=14mm,keepaspectratio]{minio}}{MinIO}
+
+\paragraph{Database: PostgreSQL.}
+A single \textbf{PostgreSQL}~\cite{postgresql_docs} instance stores both the
+platform's own tables and MLflow's tracking tables, keeping operations simple.
+The backend accesses it asynchronously through SQLAlchemy~2, so database I/O
+never blocks the event loop.
+\techpic{\includegraphics[height=16mm,keepaspectratio]{postgresql}}{PostgreSQL}
+
+\paragraph{Backend: FastAPI.}
+\textbf{FastAPI}~\cite{fastapi_docs} is an asynchronous Python web framework
+that derives request validation and an OpenAPI schema from type hints. Python
+is the natural choice because the whole machine-learning ecosystem (MLflow,
+the Kubeflow SDK, the Kubernetes client) is Python. Compared with Flask or
+Django, FastAPI brings native async support and generated documentation with
+no extra code.
+\techpic{\includegraphics[height=16mm,keepaspectratio]{fastapi}}{FastAPI}
+
+\paragraph{Frontend: Angular.}
+\textbf{Angular}~\cite{angular_docs} is a batteries-included \gls{spa}
+framework; the project uses Angular~19 with standalone components and signals,
+served by NGINX. Route guards enforce authentication and the administrator
+role on the client side, mirroring the backend's checks.
+\techpic{\includegraphics[height=16mm,keepaspectratio]{angular}}{Angular}
+
+\paragraph{Secure public exposure: Cloudflare Tunnel.}
+The platform is published through a \textbf{Cloudflare
+Tunnel}~\cite{cloudflare_tunnel}: an in-cluster agent opens an outbound-only
+connection, so no public IP address or inbound port is exposed. Public traffic
+is terminated at Cloudflare's edge over \gls{https} and passes through its
+protections, including \gls{ddos} mitigation.
+\techpic{\includegraphics[height=15mm,keepaspectratio]{cloudflare}}{Cloudflare Tunnel}
+
+\paragraph{CI/CD: GitHub Actions and Azure Container Registry.}
+Every push to the main branch triggers a \textbf{GitHub Actions} workflow that
+builds the backend and frontend images, pushes them to \textbf{\gls{acr}},
+and upgrades the cluster deployment.
+\techpair{\includegraphics[height=17mm,keepaspectratio]{github_actions}}{GitHub Actions}%
+  {\includegraphics[height=17mm,keepaspectratio]{acr}}{Azure Container Registry}
+
+\medskip
+Table~\ref{tab:software} summarizes the final technical choices, together with
+the working environment.
+
+\begin{table}[H]\centering
+\renewcommand{\arraystretch}{1.2}
+\caption{Final technical choices}\label{tab:software}
+\small
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}p{4.2cm}|X|}
+\hline
+\rowcolor{primary!15}
+\textbf{Concern} & \textbf{Selected technology}\\
+\hline
+Backend             & FastAPI (Python~3.11), SQLAlchemy~2 (async), Pydantic~v2\\
+\hline
+Frontend            & Angular~19 (standalone components, signals), Tailwind\\
+\hline
+Database            & PostgreSQL~16 (platform + MLflow)\\
+\hline
+Object storage      & MinIO (\gls{s3}-compatible)\\
+\hline
+Experiment tracking & MLflow (tracking + registry)\\
+\hline
+Orchestration       & Kubernetes (\gls{aks} / KinD), \gls{kfp}, Argo Workflows\\
+\hline
+Model serving       & KServe (RawDeployment)\\
+\hline
+Networking          & Cloudflare Tunnel (\gls{tls} at the edge)\\
+\hline
+CI/CD               & GitHub Actions, \gls{acr}\\
+\hline
+Development         & Visual Studio Code, Git/GitHub, Docker\\
+\hline
+Modeling \& report  & \gls{uml} (PlantUML, draw.io), \LaTeX\\
+\hline
+Hardware            & Intel Core i7 / 16\,GB workstation; \gls{aks} cluster\\
+\hline
+\end{tabularx}
+\end{table}
+
+% ---------------------------------------------------------------------------
+\section{Conclusion}
+This chapter fixed the business and system objectives, situated the existing
+manual workflow at maturity level~0, showed that no existing platform covers
+every needed capability, and selected an open-source technology for each
+concern. The next chapter designs the system built on these choices.

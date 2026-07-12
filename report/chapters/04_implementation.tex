@@ -1,0 +1,429 @@
+%==============================================================================
+%  CHAPTER 4 — IMPLEMENTATION AND DEPLOYMENT
+%==============================================================================
+\chapter{Implementation and Deployment}
+\label{chap:implementation}
+
+\section{Introduction}
+This chapter details the realization of the design of
+Chapter~\ref{chap:design}, sprint by sprint, following the Scrum plan of
+Chapter~\ref{chap:context}. Each sprint section presents its backlog, the key
+implementation points, and the delivered interface illustrated with application
+screenshots. The chapter closes with the continuous-deployment chain and the
+execution environments. The validation of all delivered increments is consolidated in
+Chapter~\ref{chap:validation}.
+
+% ===========================================================================
+\section{Sprint 1 --- Foundation: Identity and Projects}
+\label{sec:sprint1}
+The first sprint lays the groundwork: a secure authentication system and the
+project entity around which all later work is organized
+(Figure~\ref{fig:sprint1-strip}).
+
+\begin{figure}[H]\centering
+  \includegraphics[width=\textwidth,keepaspectratio]{sprint1_features}
+  \caption{Sprint 1 at a glance: authentication, projects, isolation}
+  \label{fig:sprint1-strip}
+\end{figure}
+
+\begin{table}[H]\centering
+\renewcommand{\arraystretch}{1.15}
+\caption{Sprint~1 backlog}\label{tab:backlog-s1}
+\small
+\begin{tabularx}{\textwidth}{|c|X|c|}
+\hline
+\rowcolor{primary!15}
+\textbf{\#} & \textbf{Task} & \textbf{Pts}\\
+\hline
+1 & Design the user and project data model & 2\\ \hline
+1 & Implement signup / login / refresh with JWT & 3\\ \hline
+1 & Build the login and signup user interface & 1\\ \hline
+2 & Implement project CRUD with ownership checks & 2\\ \hline
+2 & Bind each project to its own tracking experiment & 1\\ \hline
+2 & Build the projects list and detail interface & 1\\ \hline
+\end{tabularx}
+\end{table}
+
+\subsection{Authentication with JWT}
+Authentication is stateless and based on \gls{jwt}. On login, the backend
+verifies the password against its stored bcrypt hash and issues a short-lived
+\emph{access} token and a longer-lived \emph{refresh} token. Protected
+endpoints depend on a function that decodes the token and resolves the current
+user; the refresh endpoint renews the session without re-entering credentials
+(Figure~\ref{fig:screen_login}).
+
+\bigshot{screen_login}{The authentication screen}{A returning user signs in
+with email and password; new users switch to the sign-up form, and sessions
+are kept alive transparently through the refresh token.}
+
+\subsection{Project Management and Isolation}
+A project is the organizing unit of the platform. Creating one also provisions
+a dedicated experiment in the tracking server, so every run under the project
+is grouped automatically. All project endpoints enforce an ownership check
+that answers \texttt{404}, not \texttt{403}, for foreign resources: another
+user's project simply does not exist for the caller. The frontend mirrors this
+protection with an Angular route guard that redirects any unauthenticated
+access to the login page (Figure~\ref{fig:screen_projects}).
+
+\bigshot{screen_projects}{The projects workspace}{Each card is an isolated
+project bound to its own tracking experiment, and the dialog creates a new
+project; a user only ever sees the projects they own.}
+
+\subsection{Sprint Review}
+The increment was demonstrated to the supervisors and accepted: accounts,
+sessions, and isolated project workspaces worked end to end on the cluster.
+The retrospective confirmed the choice of stateless \gls{jwt} sessions and led
+to one adjustment: answering \texttt{404} instead of \texttt{403} on foreign
+resources, so that ownership is never leaked.
+
+% ===========================================================================
+\section{Sprint 2 --- Training and Tracking: the Engine}
+\label{sec:sprint2}
+The second sprint delivers the heart of the platform: uploading code and data,
+running it as an isolated job on the cluster, and capturing the results
+automatically (Figure~\ref{fig:sprint2-strip}).
+
+\begin{figure}[H]\centering
+  \includegraphics[width=\textwidth,keepaspectratio]{sprint2_features}
+  \caption{Sprint 2 at a glance: upload, conversion, cluster runs, live logs}
+  \label{fig:sprint2-strip}
+\end{figure}
+
+\begin{table}[H]\centering
+\renewcommand{\arraystretch}{1.15}
+\caption{Sprint~2 backlog}\label{tab:backlog-s2}
+\small
+\begin{tabularx}{\textwidth}{|c|X|c|}
+\hline
+\rowcolor{primary!15}
+\textbf{\#} & \textbf{Task} & \textbf{Pts}\\
+\hline
+3 & Upload code/dataset to object storage & 3\\ \hline
+3 & Auto-detect the entry script in an upload & 2\\ \hline
+4 & Build the training pipeline (download $\to$ run $\to$ autolog) & 5\\ \hline
+4 & Convert notebooks to scripts and inject the autolog wrapper & 3\\ \hline
+5 & Enable automatic capture of metrics, parameters, artifacts & 5\\ \hline
+6 & Stream live pipeline logs to the UI & 3\\ \hline
+7 & Build the experiments browsing interface & 3\\ \hline
+7 & Build the run-details view with metric cards and an artifact browser & 3\\ \hline
+\end{tabularx}
+\end{table}
+
+\subsection{Upload and Entry-Script Detection}
+Uploaded files are stored in the object store under a key derived from the
+project and a short unique prefix. The backend supports scripts, notebooks,
+and archives, and auto-detects the entry script by a fixed priority: an
+explicit user choice, then conventional names (\texttt{main.py},
+\texttt{train.py}), then the only script present, and finally the notebook
+(Figure~\ref{fig:screen_upload}).
+
+\bigshot{screen_upload}{The upload area}{Code (\texttt{.py} / \texttt{.ipynb} /
+\texttt{.zip}) and datasets are dropped straight in the browser; the entry
+script is detected automatically and the uploaded files are listed below.}
+
+\subsection{Notebook-to-Script Conversion}
+Real-world notebooks are full of Jupyter-only constructs (\texttt{!pip
+install}, cell magics, shell commands) that crash outside Jupyter. At upload
+time, the platform converts every notebook into a clean, runnable script
+(Figure~\ref{fig:notebook-convert}): cells that already parse as pure Python
+are kept byte-for-byte; the others are translated with IPython's own
+transformer~\cite{nbconvert_docs}, then rewritten into portable Python ---
+\texttt{!pip install x} becomes a real \texttt{subprocess} install (and the
+packages are reported to the interface), \texttt{\%\%time} keeps its body,
+display-only magics are commented out. The final script must compile, or the
+system falls back safely to in-pod conversion.
+
+\begin{figure}[H]\centering
+  \includegraphics[width=\textwidth,keepaspectratio]{notebook_convert}
+  \caption{Notebook-to-script conversion: before and after}
+  \label{fig:notebook-convert}
+\end{figure}
+
+\subsection{The Training Run}
+A training run executes inside an isolated pod, following the training path
+designed in Section~\ref{sec:pipeline-org}: download code and dataset, install
+missing dependencies (with version pins for known conflicts), and run the
+entry script under a generated runner that enables automatic tracking first.
+The runner also neutralizes blocking calls (\texttt{plt.show()},
+\texttt{input()}) and shims runtime-only modules such as \texttt{google.colab},
+so notebooks exported from cloud environments run unchanged. While the run
+executes, the backend streams the pod's logs to the browser in real time
+(Figure~\ref{fig:screen_logs}).
+
+\bigshot{screen_logs}{The live log terminal}{The training pod's output streams
+to the browser as the run executes, so the user follows dependency
+installation, notebook conversion, and training in real time.}
+
+\subsection{Experiments Intelligence}
+Captured runs are made comparable: the experiments view groups runs by model
+family, ranks them on \emph{evaluation} metrics only (never training scores),
+flags the champion model, and registers any run as a model version in one
+click (Figures~\ref{fig:expintel} and~\ref{fig:screen_experiments}).
+
+\begin{figure}[H]\centering
+  \includegraphics[width=\textwidth,keepaspectratio]{expintel_features}
+  \caption{Experiments intelligence: grouping, fair ranking, champion, one-click register}
+  \label{fig:expintel}
+\end{figure}
+
+\bigshot{screen_experiments}{The experiments view}{Runs are grouped by model
+family with their captured metrics, the champion run is highlighted, and any
+run can be registered as a model version in one click.}
+
+\subsection{Run Details and Artifact Browser}
+\label{sec:artifact-browser}
+Each run opens into a detail view: a status header, headline \textbf{metric
+cards}, and a searchable parameter list. Its second half is an
+\textbf{artifact browser}: the backend lists the run's files directly through
+the \gls{s3} \gls{api} and streams any file with its correct content type, so
+evaluation plots render inline, folders are navigable, and every file is
+downloadable. Both endpoints resolve the run back to a project owned by the
+caller and answer \texttt{404} otherwise, so artifacts are never leaked across
+users.
+
+\subsection{Sprint Review}
+The review demonstrated the full training loop on real notebooks taken from
+Colab, not simplified examples. The retrospective identified dependency
+conflicts inside training pods as the most frequent failure cause, which
+motivated the automatic missing-dependency installation and, later, the
+pre-flight code analyzer of Sprint~4.
+
+% ===========================================================================
+\section{Sprint 3 --- Registry and Deployment}
+\label{sec:sprint3}
+The third sprint turns tracked runs into deployable assets: a registry with
+lifecycle stages, one-click deployment, and an in-interface prediction tester
+(Figure~\ref{fig:sprint3-strip}).
+
+\begin{figure}[H]\centering
+  \includegraphics[width=\textwidth,keepaspectratio]{sprint3_features}
+  \caption{Sprint 3 at a glance: registry, promotion, KServe deployment, tester}
+  \label{fig:sprint3-strip}
+\end{figure}
+
+\begin{table}[H]\centering
+\renewcommand{\arraystretch}{1.15}
+\caption{Sprint~3 backlog}\label{tab:backlog-s3}
+\small
+\begin{tabularx}{\textwidth}{|c|X|c|}
+\hline
+\rowcolor{primary!15}
+\textbf{\#} & \textbf{Task} & \textbf{Pts}\\
+\hline
+8  & Register model versions from successful runs & 2\\ \hline
+8  & Build the model registry interface & 3\\ \hline
+9  & Promote models across Staging/Production/Archived & 3\\ \hline
+10 & Deploy a model as an InferenceService on the cluster & 5\\ \hline
+10 & Detect the model's framework and serve XGBoost natively & 3\\ \hline
+10 & Track deployment status and endpoint & 3\\ \hline
+11 & Build the in-UI prediction tester & 5\\ \hline
+11 & Surface readable model-server errors to the caller & 2\\ \hline
+\end{tabularx}
+\end{table}
+
+\subsection{Registry and Promotion}
+Successful runs can be registered as named, versioned models. Each version
+carries a lifecycle stage (Staging, Production, Archived) that the user
+changes from the interface; the tracking server remains the source of truth,
+mirrored in the platform's database (Figure~\ref{fig:screen_registry}).
+
+\bigshot{screen_registry}{The model registry}{Each registered version shows its
+lifecycle-stage badge (Staging / Production / Archived) and can be promoted or
+deployed directly from this view.}
+
+\subsection{One-Click Deployment}
+Deploying a model reduces to creating one declarative \texttt{InferenceService}
+resource, following the serving path of Section~\ref{sec:pipeline-org}; the
+operator reconciles it into a running model server. The backend then polls the
+resource's status conditions and updates the deployment record until the
+service is \texttt{READY}, so the interface always reflects the real cluster
+state (Figure~\ref{fig:screen_deploy}).
+
+\bigshot{screen_deploy}{The deployment panel}{The deployment progresses through
+its status conditions to \texttt{READY}, and the live prediction endpoint of
+the served model is displayed.}
+
+\subsection{Multi-Framework Serving}
+\label{sec:multi-framework}
+The serving operator provides one model server per framework, and serving an
+XGBoost model through the scikit-learn server fails at startup. The backend
+therefore \textbf{detects the framework} at deployment time by listing the
+file names in the model's artifact folder: a booster file
+(\texttt{model.bst} / \texttt{.json} / \texttt{.ubj} / \texttt{.xgb}) marks an
+XGBoost model, anything else defaults to scikit-learn. One incompatibility
+remains: MLflow saves XGBoost boosters as \texttt{model.xgb}, a name the
+XGBoost server refuses. In that case the backend \emph{materializes} a servable
+copy (\texttt{model.xgb} $\rightarrow$ \texttt{model.bst}) in the object store
+before creating the service. The user never sees any of this: they click
+``Deploy'' and the right runtime serves the right file.
+
+\subsection{Prediction and Error Handling}
+\label{sec:prediction-errors}
+The backend forwards prediction requests to the model server through the
+cluster's \gls{api}, so no model needs a public address; the interface offers
+a tester with sample inputs (Figure~\ref{fig:screen_predict}). Failures are
+normalized into a dedicated \texttt{PredictionError} with a \emph{readable}
+message: when the model server rejects an input, its own error text is returned
+with \texttt{502}; when it does not answer in time, the request fails fast with
+\texttt{504}. Forwarded predictions run in a worker thread, so a slow model
+server never blocks the asynchronous event loop.
+
+\bigshot{screen_predict}{The prediction tester}{The user submits sample inputs
+to the deployed model and the returned prediction is displayed, with a readable
+error message when an input is malformed.}
+
+\subsection{Sprint Review}
+The review showed a model going from a tracked run to a live, tested service
+in a few clicks. The retrospective surfaced the framework mismatch between
+MLflow's artifacts and the serving runtimes; the automatic framework detection
+and booster materialization presented above were the direct outcome.
+
+% ===========================================================================
+\section{Sprint 4 --- Observability, Public API, and Administration}
+\label{sec:sprint4}
+The final sprint makes the platform observable, opens deployed models to the
+outside world, and adds administration and diagnostics
+(Figure~\ref{fig:sprint4-strip}).
+
+\begin{figure}[H]\centering
+  \includegraphics[width=\textwidth,keepaspectratio]{sprint4_features}
+  \caption{Sprint 4 at a glance: dashboards, telemetry, API keys, administration}
+  \label{fig:sprint4-strip}
+\end{figure}
+
+\begin{table}[H]\centering
+\renewcommand{\arraystretch}{1.15}
+\caption{Sprint~4 backlog}\label{tab:backlog-s4}
+\small
+\begin{tabularx}{\textwidth}{|c|X|c|}
+\hline
+\rowcolor{primary!15}
+\textbf{\#} & \textbf{Task} & \textbf{Pts}\\
+\hline
+12 & Collect cluster and per-pod resource metrics & 3\\ \hline
+12 & Build the monitoring dashboard & 2\\ \hline
+12 & Record per-prediction telemetry and aggregate serving KPIs & 3\\ \hline
+13 & Generate and store per-deployment API keys (hashed) & 3\\ \hline
+13 & Expose a public, key-authenticated prediction endpoint & 2\\ \hline
+14 & Capture and surface user-script errors for failed runs & 3\\ \hline
+14 & Add a static pre-flight code analyzer with warnings & 2\\ \hline
+15 & Add the administrator role and administration area & 5\\ \hline
+\end{tabularx}
+\end{table}
+
+\subsection{Cluster Observability}
+The backend queries the cluster's metrics service~\cite{metrics_server} for
+per-pod \gls{cpu} and memory usage and aggregates cluster-wide figures,
+surfaced as live gauges and charts on the dashboard
+(Figure~\ref{fig:screen_dashboard}).
+
+\bigshot{screen_dashboard}{The metrics dashboard}{Cluster-wide and per-pod
+\gls{cpu} and memory usage are shown as live gauges and charts, so the health
+of the cluster and of each deployed model is visible at a glance.}
+
+\subsection{Serving Telemetry and KPIs}
+\label{sec:serving-telemetry}
+Resource metrics say whether a model server is \emph{running}, not how it is
+\emph{behaving}. The platform therefore records one \texttt{PredictionLog} row
+for every served prediction --- from the tester or the public \gls{api} ---
+with latency, \gls{http} outcome, batch size, and origin. Rows are written
+best-effort and contain no payloads.
+
+A per-project endpoint aggregates these rows over a selectable window into the
+\glspl{kpi} that matter once a model is live: request volume, error rate,
+average and 95\textsuperscript{th}-percentile latency, and a bucketed timeline
+rendered as charts in the Monitoring tab.
+
+\subsection{Public Prediction API with API Keys}
+Deployment makes a model reachable from inside the platform; this sprint opens
+it to the outside world. The owner creates \textbf{per-deployment \gls{api}
+keys}: the key (\texttt{mlops\_<random>}) is shown \textbf{once}, only its
+\gls{sha}-256 hash and a display prefix are stored, and a key can be revoked
+at any time.
+
+External clients call a dedicated public endpoint, outside the
+\gls{jwt}-protected \gls{api}, with the key in the \texttt{Authorization}
+header; the backend hashes and looks it up, confirms the deployment is ready,
+and forwards the request (Figure~\ref{fig:public-api}). Every public call also
+lands in the serving telemetry, so external usage is visible in the same
+Monitoring tab. A snippet generator produces ready-to-paste cURL, JavaScript,
+and Python examples (Figures~\ref{fig:public-api} and~\ref{fig:screen_apikeys}).
+
+\begin{figure}[H]\centering
+  \includegraphics[width=0.9\textwidth,height=0.42\textheight,keepaspectratio]{public_api}
+  \caption{Public API flow: key issuance, authenticated request, response}
+  \label{fig:public-api}
+\end{figure}
+
+\bigshot{screen_apikeys}{The API-keys panel}{Per-deployment keys are created and
+revoked here (only their hash is stored), and the code-snippet generator
+produces ready-to-paste cURL, JavaScript, and Python calls.}
+
+\subsection{Administration}
+A \texttt{role} field distinguishes users from administrators; a backend
+dependency guards every administrative endpoint and an Angular guard protects
+the routes. The administration area provides user management (activate,
+deactivate, promote, demote, purge, delete, with anti-lockout safeguards), a
+platform overview, and read-only oversight of all users' resources. Because the
+role is read from the database on every request, a demotion takes effect
+immediately (Figure~\ref{fig:screen_admin}).
+
+\bigshot{screen_admin}{The administration area}{Every account is listed with its
+role and status; an administrator can activate, deactivate, promote, demote,
+purge, or delete a user, and oversee all users' resources.}
+
+\subsection{Diagnostics and Robustness}
+The platform captures the user-script error of a failed run and stores it
+durably, so the interface shows a concise ``why did this fail'' explanation. A
+static pre-flight analyzer also inspects uploaded code before launch and warns
+about common pitfalls: missing training calls, hard-coded local paths,
+notebook-only constructs (Figure~\ref{fig:screen_diagnostics}).
+
+\bigshot{screen_diagnostics}{The failure-explanation panel}{The captured
+user-script error is surfaced on the failed run, telling the user \emph{why} it
+failed without digging through raw job logs.}
+
+\subsection{Sprint Review}
+The final review demonstrated an external client calling a deployed model with
+an \gls{api} key and the resulting traffic appearing live in the Monitoring
+tab. With administration and diagnostics accepted, the product backlog of
+Chapter~\ref{chap:context} was fully delivered.
+
+% ===========================================================================
+\section{Continuous Deployment and Environments}
+\label{sec:cicd}
+The platform itself is delivered like software. Every push to the main branch
+triggers a GitHub Actions workflow that builds the backend and frontend
+images with registry-backed layer caching, pushes them to \gls{acr}, and
+upgrades the Helm release on the \gls{aks} cluster. A concurrency group cancels
+any in-progress run when a newer commit arrives, so the cluster always
+converges on the latest version of the main branch.
+
+The same Helm chart deploys the full stack to both environments, with only a
+values file changing (Table~\ref{tab:environments}).
+
+\begin{table}[H]\centering
+\renewcommand{\arraystretch}{1.2}
+\caption{Execution environments}\label{tab:environments}
+\small
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}p{3.4cm}|X|X|}
+\hline
+\rowcolor{primary!15}
+\textbf{Aspect} & \textbf{Development (KinD)} & \textbf{Production (AKS)}\\
+\hline
+Cluster & Kubernetes-in-Docker, local & Azure Kubernetes Service, managed\\ \hline
+Purpose & Development and tests & Live, public platform\\ \hline
+Images & Loaded locally & Pulled from \gls{acr} by CI/CD\\ \hline
+Public access & None (localhost) & Cloudflare Tunnel + managed \gls{tls}\\ \hline
+Manifests & \multicolumn{2}{c|}{Same Helm chart, different values file}\\ \hline
+\end{tabularx}
+\end{table}
+
+% ---------------------------------------------------------------------------
+\section{Conclusion}
+Four sprints turned the design into a complete platform: identity and
+projects, a training-and-tracking engine with notebook conversion, a registry
+with one-click multi-framework deployment, and observability with a public
+\gls{api} and administration --- all continuously delivered to a production
+cluster. The next chapter validates the result, scenario by scenario and on a
+real use case.

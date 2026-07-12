@@ -1,0 +1,199 @@
+================================================================================
+  SOUTENANCE SPEECH (SHORT & SIMPLE) - MLOps PLATFORM - Firas Mahjoubi
+  ~850 words = about 7 minutes -> safe inside a 10-minute slot
+================================================================================
+
+
+[SLIDE 1 - Title | 25s]
+
+Good morning. My name is Firas Mahjoubi. Today I present my end-of-studies
+project, done at INSOMEA: an MLOps platform that automates the training, the
+tracking, and the deployment of machine-learning models on Kubernetes.
+
+
+[SLIDE 2 - Agenda | 10s]
+
+Here is the plan: the context and the problem, the solution and its
+architecture, then the four sprints, a demo, and the conclusion.
+
+
+[SLIDE 3 - Host Company | 20s]
+
+INSOMEA is a Microsoft Cloud Gold Partner in the Middle East and Africa:
+six offices, more than five hundred customers, and five times Microsoft
+Partner of the Year. I worked in the Cloud & Infrastructure team, for six
+months.
+
+
+[SLIDE 4 - Project Context | 30s]
+
+The context is simple: today, machine learning is stuck in notebooks. Models
+are trained on laptops, results are lost in spreadsheets, and deployment is
+manual and fragile. Google calls this "level zero". My goal: one platform for
+the full lifecycle - upload the code, train on a cluster, track every
+experiment, deploy the model. And it is not a prototype: it runs in
+production on Azure Kubernetes Service, behind Cloudflare, updated
+automatically by CI/CD.
+
+
+[SLIDE 5 - Problem & Objectives | 35s]
+
+The whole project is one question: how can a data scientist go from a
+notebook to a live prediction service, without writing any infrastructure
+code? From this question, I set six objectives: run any code on the cluster;
+track every experiment automatically; version and promote models; deploy in
+one click; offer a public API for external applications; and monitor and
+administer the platform.
+
+
+[SLIDE 6 - State of the Art | 30s]
+
+Solutions already exist - but none of them checks all the boxes. SageMaker,
+Vertex AI, and Azure ML need a cloud expert and too much setup. Databricks is
+focused on data and training. AIchor stops at training. Kubeflow is a
+toolbox, not a product. Only this platform covers everything - with just a
+browser: upload, train, deploy. No cloud expert, no setup.
+
+
+[SLIDE 7 - Proposed Solution | 35s]
+
+Here is the solution. The user uploads a notebook or a script, with a
+dataset. Pipeline one - train and track: the code runs in an isolated pod on
+Kubernetes, and MLflow saves every parameter, metric, and artifact
+automatically. Pipeline two - register and deploy: the best model is
+versioned and deployed with KServe. The result: a live model, with a public
+API - you can predict from anywhere.
+
+
+[SLIDE 8 - Business & System Objectives | 20s]
+
+Every business goal has a delivered feature: train without owning servers;
+never lose an experiment; choose the best model with a leaderboard; deploy a
+model like software; open it to other applications with API keys; and operate
+everything with monitoring and administration.
+
+
+[SLIDES 9-10 - Methodology | 25s]
+
+I used Scrum: fifteen user stories, four sprints, six months, and a working,
+deployed increment at the end of each sprint. Sprint one: the foundation.
+Sprint two: training and tracking. Sprint three: registry and deployment.
+Sprint four: monitoring, public API, and administration.
+
+
+[SLIDE 11 - Use Case Diagram | 20s]
+
+Three actors use the system. The data scientist manages projects, trains,
+and deploys models. The administrator has all of that, plus users and
+platform management. And the external client only calls the public
+prediction API - no account needed.
+
+
+[SLIDE 12 - Technology Choices | 20s]
+
+The stack is fully open-source. For MLOps: MLflow, KServe, Kubeflow with
+Argo, and MinIO. For the application: Angular, FastAPI, and PostgreSQL. For
+the infrastructure: Kubernetes, GitHub Actions, and a Cloudflare Tunnel.
+
+
+[SLIDE 13 - Logical Architecture | 25s]
+
+The application has four layers: Angular for the interface; FastAPI for the
+API, with authentication and ownership checks; a service layer with the
+business logic, which talks to MLflow, MinIO, KServe, and Kubeflow; and
+PostgreSQL for the data.
+
+
+[SLIDE 14 - Physical Architecture | 25s]
+
+Everything runs on one Kubernetes cluster - AKS in the cloud, KinD on my
+machine, same code. Users come in through a Cloudflare Tunnel, so there is
+no public IP and no open port. And every push on GitHub builds the images
+and updates the cluster automatically.
+
+
+[SLIDE 15 - Sprint 1 | 20s]
+
+Sprint one: the foundation. JWT authentication, and project workspaces.
+Each project gets its own MLflow experiment, with strict isolation:
+another user's project simply does not exist for you.
+
+
+[SLIDE 16 - Sprint 2 | 20s]
+
+Sprint two is the heart of the platform. You drag and drop your code -
+script, notebook, or zip - it runs in a pod on the cluster, you watch the
+logs live in the browser, and MLflow autolog saves all the results.
+
+
+[SLIDE 17 - Signature Feature | 35s]
+
+One feature I am proud of: notebook-to-script conversion. Real notebooks are
+full of Jupyter-only commands that crash outside Jupyter. At upload, the
+platform converts them into clean Python scripts, using IPython's own
+transformer. Pip installs are kept as real installs,
+no code is lost, and the script is guaranteed to compile - or the system
+falls back safely.
+
+
+[SLIDE 18 - Experiments Intelligence | 20s]
+
+The experiments view groups runs by model family, ranks them only on
+evaluation metrics, flags the champion model, and registers it in one click.
+
+
+[SLIDES 19-20 - Sprint 3 & Public API | 40s]
+
+Sprint three closes the loop. The registry manages versions and stages:
+Staging, Production, Archived. Deployment is one click: the backend creates
+a KServe InferenceService, and the panel shows the status until it is Ready,
+with a live endpoint. You can test predictions in the interface. Then, the
+public API: per-deployment keys, hashed, shown only once. Any website or
+application can call the model with a simple request - no account needed.
+
+
+[SLIDES 21-22 - Sprint 4 | 30s]
+
+Sprint four makes the platform observable. The monitoring dashboard shows
+model evolution over time, version-to-version changes, and serving
+statistics: number of requests, latency, error rate. Next to that: live
+cluster metrics, clear failure diagnostics - "why did my run fail?" - and
+an admin area for users and roles.
+
+
+[SLIDE 23 - Demo | 10s + video]
+
+Now, let me show you. Here is the full lifecycle, from uploading a notebook
+to calling the deployed model from Postman.
+
+    (Play the demo video. When it ends, go to the conclusion.)
+
+
+[SLIDE 24 - Conclusion | 30s]
+
+To conclude: this project delivers the complete ML lifecycle, automated,
+from one web interface. It moves a team from MLOps level zero to level one -
+and the platform itself is delivered at level two, with full CI/CD. It runs
+on real cloud infrastructure.
+
+[SLIDE 25 - Thank you | 10s]
+
+Thank you for your attention. I am happy to answer your questions.
+
+
+================================================================================
+  DELIVERY TIPS
+================================================================================
+
+- Total: about 7 minutes of speaking. You have room to breathe, pause, and
+  point at the slides - do not rush.
+
+- Slow down on three moments: the question (slide 5), "only this platform
+  covers every capability" (slide 6), and the signature feature (slide 17).
+
+- Five anchor sentences - if you remember them, you cannot get lost:
+    "The context is simple."
+    "The whole project is one question."
+    "Solutions already exist."
+    "Here is the solution."
+    "Now, let me show you."

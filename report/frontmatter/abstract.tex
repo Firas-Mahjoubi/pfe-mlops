@@ -12,13 +12,16 @@ project, carried out within \textbf{INSOMEA}, addresses this gap by designing an
 implementing a complete, self-hosted \textbf{MLOps platform} that automates the
 machine-learning lifecycle from a single web interface. The platform lets a data
 scientist authenticate, organize work into projects, upload code and data, run
-training on a Kubernetes cluster with automatic experiment tracking, register and
-promote model versions, deploy them as live prediction services, and expose them
-to external applications through secured public API keys, while an administrator
-oversees users and resources. The system is built with FastAPI, Angular, Kubeflow
+training on a Kubernetes cluster with automatic experiment tracking and artifact
+browsing, register and promote model versions, deploy them as live prediction
+services with automatic framework detection, expose them to external applications
+through secured public API keys, and follow their behavior through per-prediction
+serving telemetry (volume, latency, error rate), while an administrator oversees
+users and resources. The system is built with FastAPI, Angular, Kubeflow
 Pipelines, MLflow, KServe, MinIO, and PostgreSQL, is fully containerized, and is
 continuously deployed to Azure Kubernetes Service. The work was managed with the
-Scrum method over four sprints spanning six months.
+Scrum method over four sprints spanning six months, and validated end to end
+with a real telecom churn use case.
 
 \vspace{0.6cm}
 \noindent\textbf{Keywords:} MLOps, Kubernetes, machine learning, experiment
@@ -39,13 +42,16 @@ automatise le cycle de vie de l'apprentissage automatique depuis une interface w
 unique. La plateforme permet \`a un data scientist de s'authentifier, d'organiser
 son travail en projets, de t\'el\'everser code et donn\'ees, de lancer des
 entra\^inements sur un cluster Kubernetes avec un suivi automatique des
-exp\'eriences, d'enregistrer et de promouvoir des versions de mod\`eles, de les
-d\'eployer comme services de pr\'ediction, et de les exposer \`a des applications
-externes via des cl\'es API publiques s\'ecuris\'ees, tandis qu'un administrateur
-supervise les utilisateurs et les ressources. Le syst\`eme repose sur FastAPI,
+exp\'eriences et la consultation des artefacts, d'enregistrer et de promouvoir des
+versions de mod\`eles, de les d\'eployer comme services de pr\'ediction avec
+d\'etection automatique du framework, de les exposer \`a des applications externes
+via des cl\'es API publiques s\'ecuris\'ees, et de suivre leur comportement par une
+t\'el\'em\'etrie de service par pr\'ediction (volume, latence, taux d'erreur),
+tandis qu'un administrateur supervise les utilisateurs et les ressources. Le syst\`eme repose sur FastAPI,
 Angular, Kubeflow Pipelines, MLflow, KServe, MinIO et PostgreSQL, est enti\`erement
 conteneuris\'e et d\'eploy\'e en continu sur Azure Kubernetes Service. Le travail a
-\'et\'e conduit avec la m\'ethode Scrum en quatre sprints sur six mois.
+\'et\'e conduit avec la m\'ethode Scrum en quatre sprints sur six mois, et
+valid\'e de bout en bout par un cas d'usage r\'eel de churn t\'el\'ecom.
 
 \vspace{0.6cm}
 \noindent\textbf{Mots cl\'es :} MLOps, Kubernetes, apprentissage automatique,

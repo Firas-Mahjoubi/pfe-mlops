@@ -15,25 +15,35 @@ deployed, and consumed entirely through the platform.
 \section{Functional Validation}
 \label{sec:functional-validation}
 Each increment was validated manually against its acceptance scenarios before
-its sprint closed. Table~\ref{tab:tests} consolidates the main scenarios by
-capability area.
+its sprint closed. Tables~\ref{tab:tests-s1}--\ref{tab:tests-s4} consolidate the
+main scenarios, one table per sprint.
 
 \begin{table}[H]\centering
 \renewcommand{\arraystretch}{1.15}
-\caption{Consolidated test scenarios}\label{tab:tests}
+\caption{Sprint 1 test scenarios --- Authentication and projects}\label{tab:tests-s1}
 \small
 \begin{tabularx}{\textwidth}{|X|X|c|}
 \hline
 \rowcolor{primary!15}
 \textbf{Scenario} & \textbf{Expected result} & \textbf{Status}\\
 \hline
-\multicolumn{3}{|l|}{\cellcolor{primary!8}\textbf{Authentication and projects (Sprint 1)}}\\ \hline
 Sign up, then sign in & Tokens issued; redirect to dashboard & OK\\ \hline
 Sign in with wrong password & \texttt{401}, no token issued & OK\\ \hline
 Access token expiry & Session silently renewed via refresh token & OK\\ \hline
 Create a project & Stored and bound to a new tracking experiment & OK\\ \hline
 Open another user's project & \texttt{404}, resource invisible & OK\\ \hline
-\multicolumn{3}{|l|}{\cellcolor{primary!8}\textbf{Training and tracking (Sprint 2)}}\\ \hline
+\end{tabularx}
+\end{table}
+
+\begin{table}[H]\centering
+\renewcommand{\arraystretch}{1.15}
+\caption{Sprint 2 test scenarios --- Training and tracking}\label{tab:tests-s2}
+\small
+\begin{tabularx}{\textwidth}{|X|X|c|}
+\hline
+\rowcolor{primary!15}
+\textbf{Scenario} & \textbf{Expected result} & \textbf{Status}\\
+\hline
 Upload a \texttt{.zip} without an entry script & Entry script auto-detected by priority order & OK\\ \hline
 Run a scikit-learn script & Metrics, parameters, and model captured automatically & OK\\ \hline
 Run a real-world Colab notebook & Converted at upload, shims applied, run succeeds & OK\\ \hline
@@ -42,16 +52,38 @@ Run a failing script & Run marked failed; readable reason shown on the run & OK\
 Watch logs during a run & Log lines stream live to the browser & OK\\ \hline
 Open a run's artifacts & Folders navigable; images preview; files download & OK\\ \hline
 Request another user's artifacts & \texttt{404}, the run is not revealed & OK\\ \hline
-\multicolumn{3}{|l|}{\cellcolor{primary!8}\textbf{Registry and deployment (Sprint 3)}}\\ \hline
+\end{tabularx}
+\end{table}
+
+\begin{table}[H]\centering
+\renewcommand{\arraystretch}{1.15}
+\caption{Sprint 3 test scenarios --- Registry and deployment}\label{tab:tests-s3}
+\small
+\begin{tabularx}{\textwidth}{|X|X|c|}
+\hline
+\rowcolor{primary!15}
+\textbf{Scenario} & \textbf{Expected result} & \textbf{Status}\\
+\hline
 Register a run, promote to Production & Version and stage updated in registry and interface & OK\\ \hline
 Deploy a registered model & InferenceService created; status reaches READY & OK\\ \hline
 Deploy an XGBoost model & Framework detected; booster materialized; served natively & OK\\ \hline
 Predict with the wrong feature count & Readable \texttt{502} carrying the model server's message & OK\\ \hline
 Delete a deployment & Cluster resources removed; record cleaned up & OK\\ \hline
-\multicolumn{3}{|l|}{\cellcolor{primary!8}\textbf{Public API, monitoring, administration (Sprint 4)}}\\ \hline
+\end{tabularx}
+\end{table}
+
+\begin{table}[H]\centering
+\renewcommand{\arraystretch}{1.15}
+\caption{Sprint 4 test scenarios --- Public API, monitoring, administration}\label{tab:tests-s4}
+\small
+\begin{tabularx}{\textwidth}{|X|X|c|}
+\hline
+\rowcolor{primary!15}
+\textbf{Scenario} & \textbf{Expected result} & \textbf{Status}\\
+\hline
 Call the public endpoint with a valid key & Prediction returned without a platform account & OK\\ \hline
 Call with a revoked key & \texttt{401} & OK\\ \hline
-Send predictions, open the Monitoring tab & Volume, error rate, and latency KPIs reflect the calls & OK\\ \hline
+Send predictions, open the Monitoring tab & Volume, error rate, latency, per-origin and per-deployment breakdown reflect the calls & OK\\ \hline
 Call an admin endpoint as a normal user & \texttt{403} & OK\\ \hline
 Administrator attempts self-demotion & Refused with an explanatory error & OK\\ \hline
 \end{tabularx}
@@ -139,20 +171,52 @@ team should call first (Figure~\ref{fig:casestudy-proof}).
   \label{fig:casestudy-proof}
 \end{figure}
 
+\bigshot{screen_churn_deploy}{The churn model, registered and deployed}{The
+champion run for this case study, registered from the leaderboard and deployed
+as a live \texttt{InferenceService}: the platform's own registry and
+deployment record for the exact model behind the metrics above, status
+\texttt{READY}.}
+
 \subsection{Consuming the Model from Outside}
 To close the loop, the deployed churn model was called from an external
-\gls{http} client (Postman) using a per-deployment \gls{api} key, exactly as a
+\gls{http} client using a per-deployment \gls{api} key, exactly as a
 third-party retention application would (Listing~\ref{lst:churn-call}). The
-call and its latency then appear in the project's Monitoring tab.
+15 values are the model's actual training features, in order ---
+\texttt{nb\_reclamations}, \texttt{delai\_moy\_resolution},
+\texttt{delai\_max\_resolution}, \texttt{delai\_min\_resolution},
+\texttt{delai\_std\_resolution}, \texttt{nb\_incidents\_longs},
+\texttt{nb\_non\_resolus}, \texttt{nb\_categories\_distinctes},
+\texttt{a\_eu\_reclamation}, \texttt{ratio\_non\_resolu},
+\texttt{ratio\_incidents\_longs}, \texttt{score\_risque}, \texttt{debit\_num},
+\texttt{fsi\_encoded}, \texttt{cat\_encoded} --- and the response below is a
+real capture, not an illustration. The call and its latency then appear in the
+project's Monitoring tab.
 
-\begin{lstlisting}[language=bash,caption={External prediction call against the deployed churn model.},label={lst:churn-call}]
+\begin{lstlisting}[language=bash,caption={External prediction call against the deployed churn model (real request/response capture).},label={lst:churn-call}]
 curl -X POST "https://mlops.firasmahjoubi.app/api/public/predict/<deployment_id>" \
   -H "Authorization: Bearer mlops_<key>" \
   -H "Content-Type: application/json" \
-  -d '{"instances": [[3, 41.2, 0.6, 12, 1, 0, ...]]}'
+  -d '{"instances": [[5, 8.5, 15, 2, 4.2, 2, 1, 3, 1, 0.2, 0.4, 18.55, 8, 2, 1]]}'
 
-{"predictions": [0.87]}   % churn risk of this client: 87%
+{"predictions":[0.03778325021266937]}   % churn risk of this client: 3.8%
 \end{lstlisting}
+
+This exact call initially failed with a \texttt{502} carrying \emph{``training
+data did not have the following fields: nb\_reclamations, \ldots''} ---
+XGBoost's booster embeds the training \texttt{DataFrame}'s column names,
+and the public/tester endpoints send a plain, unnamed array, so the model
+server rejected every request for this deployment. The fix strips
+\texttt{feature\_names}/\texttt{feature\_types} from the booster before it is
+saved as the servable \texttt{model.bst} (Section~\ref{sec:sprint3}), so an
+unnamed array matches what the booster now expects. Applied to this
+deployment's artifact and the predictor pod restarted, the same call now
+returns \texttt{200} with a real prediction, as captured above.
+
+\bigshot{screen_churn_monitoring}{Live traffic from the external call}{The
+churn deployment's Monitoring tab immediately after the Postman call above:
+the request is counted, its latency measured, and it is attributed to the
+public \gls{api} origin --- closing the loop from an outside \gls{http} client
+to the platform's own serving telemetry.}
 
 \subsection{What the Case Study Demonstrates}
 This single use case exercises every layer built in the four sprints:

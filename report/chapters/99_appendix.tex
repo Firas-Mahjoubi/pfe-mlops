@@ -60,7 +60,8 @@ DELETE & \texttt{/deployments/\{id\}/api-keys/ \{kid\}} & Revoke a key\\ \hline
 POST & \texttt{/api/public/predict/\{id\}} & Prediction for external clients\\ \hline
 \multicolumn{3}{|l|}{\cellcolor{primary!12}\textbf{Monitoring and administration}}\\ \hline
 GET  & \texttt{/cluster/metrics} & Cluster and per-pod resource metrics\\ \hline
-GET  & \texttt{/monitoring/project/\{id\}/ serving} & Serving KPIs: volume, error rate, latency, timeline\\ \hline
+GET  & \texttt{/monitoring/project/\{id\}/ serving} & Serving KPIs: volume, error rate, latency, timeline, traffic by origin, per-deployment breakdown\\ \hline
+GET  & \texttt{/deployments/\{id\}/metrics} & Live per-deployment \gls{cpu} and memory usage\\ \hline
 GET  & \texttt{/admin/users} & List all accounts (admin)\\ \hline
 PATCH / DELETE & \texttt{/admin/users/\{id\}} & Update role/status or delete (admin)\\ \hline
 POST & \texttt{/admin/users/\{id\}/purge} & Purge a user's resources (admin)\\ \hline

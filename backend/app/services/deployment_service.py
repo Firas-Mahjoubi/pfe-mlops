@@ -148,35 +148,48 @@ def detect_framework(storage_uri: str) -> str:
 
 
 def ensure_xgboost_model_file(storage_uri: str) -> None:
-    """Make sure the model dir has a booster file KServe's xgbserver can load.
+    """Make sure the model dir has a servable, unnamed booster file.
 
     MLflow's xgboost autolog writes `model.xgb`, but xgbserver v0.13 only loads
-    `model.bst` / `model.json` / `model.ubj`. When only `model.xgb` (or another
-    non-servable booster) is present, copy it to `model.bst` in-place (xgboost
-    detects the format from file content, so the legacy-binary `.xgb` loads fine
-    under the `.bst` name). No-op if a servable file already exists.
+    `model.bst` / `model.json` / `model.ubj`. Beyond the filename, a booster
+    fit on a pandas DataFrame (the normal training pattern) embeds the
+    DataFrame's column names in the saved file; xgboost then validates those
+    names against the incoming DMatrix at predict time. The platform's public
+    and in-app predict paths always send a plain `instances` array with no
+    column names, so a name-carrying booster fails every request with a
+    "training data did not have the following fields" error. Loading the
+    booster and stripping `feature_names`/`feature_types` before saving it as
+    `model.bst` makes it accept the unnamed arrays the platform actually sends.
     """
+    import tempfile
+
+    import xgboost as xgb
+
     from app.services import mlflow_service
     try:
         names = _list_model_files(storage_uri)
     except Exception:
         logger.warning("ensure_xgboost_model_file: cannot list %s; skipping", storage_uri, exc_info=True)
         return
-    if names & _XGB_SERVABLE:
-        return  # already servable
-    source = next((f for f in ("model.xgb", "model.json", "model.ubj", "model.bst") if f in names), None)
+    source = next((f for f in ("model.bst", "model.json", "model.ubj", "model.xgb") if f in names), None)
     if not source:
         logger.warning("ensure_xgboost_model_file: no booster file found under %s", storage_uri)
         return
     bucket, prefix = mlflow_service._parse_s3_uri(storage_uri)
     base = prefix.rstrip("/")
     s3 = mlflow_service._s3_client()
-    s3.copy_object(
-        Bucket=bucket,
-        Key=f"{base}/model.bst",
-        CopySource={"Bucket": bucket, "Key": f"{base}/{source}"},
-    )
-    logger.info("Materialized model.bst from %s under %s", source, storage_uri)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        src_path = f"{tmp}/{source}"
+        dst_path = f"{tmp}/model.bst"
+        s3.download_file(bucket, f"{base}/{source}", src_path)
+        booster = xgb.Booster()
+        booster.load_model(src_path)
+        booster.feature_names = None
+        booster.feature_types = None
+        booster.save_model(dst_path)
+        s3.upload_file(dst_path, bucket, f"{base}/model.bst")
+    logger.info("Materialized unnamed model.bst from %s under %s", source, storage_uri)
 
 
 def _patch_webhook_failure_policy(policy: str = "Ignore") -> bool:

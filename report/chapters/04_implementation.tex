@@ -321,7 +321,7 @@ surfaced as live gauges and charts on the dashboard
 \gls{cpu} and memory usage are shown as live gauges and charts, so the health
 of the cluster and of each deployed model is visible at a glance.}
 
-\subsection{Serving Telemetry and KPIs}
+\subsection{Serving Monitoring}
 \label{sec:serving-telemetry}
 Resource metrics say whether a model server is \emph{running}, not how it is
 \emph{behaving}. The platform therefore records one \texttt{PredictionLog} row
@@ -330,9 +330,37 @@ with latency, \gls{http} outcome, batch size, and origin. Rows are written
 best-effort and contain no payloads.
 
 A per-project endpoint aggregates these rows over a selectable window into the
-\glspl{kpi} that matter once a model is live: request volume, error rate,
-average and 95\textsuperscript{th}-percentile latency, and a bucketed timeline
-rendered as charts in the Monitoring tab.
+\glspl{kpi} that matter once a model is live and renders them in a dedicated
+\textbf{Monitoring} tab: request volume, error rate, average and
+95\textsuperscript{th}-percentile latency, and a bucketed timeline. The same
+tab splits the traffic \textbf{by origin} (in-platform tester versus external
+public-\gls{api} clients) and provides a \textbf{per-deployment breakdown} so a
+project serving several models can be read at a glance. Each deployed model's
+\textbf{live \gls{cpu} and memory usage} is surfaced inline in this tab as well,
+read from the same metrics service as the cluster dashboard, giving one
+operational view per model (Figure~\ref{fig:screen_monitoring}).
+
+\bigshot{screen_monitoring}{The Monitoring tab}{Live serving usage of a
+project's deployed models: request volume, error rate, and average/p95 latency
+over a selectable window, a per-hour timeline, the traffic split by origin
+(tester versus public \gls{api}), a per-deployment breakdown, and each deployed
+model's live \gls{cpu} and memory consumption.}
+
+\subsection{Model Insights}
+\label{sec:insights}
+Monitoring watches the live \emph{service}; the \textbf{Insights} tab watches the
+\emph{model itself} as it evolves. It gathers, across a project's registered
+versions, the model-evolution \glspl{kpi} (how the evaluation metrics move from
+one version to the next), a concise \textbf{health verdict}, and the
+\textbf{version and stage progression} through Staging, Production, and Archived.
+Keeping this apart from operational monitoring means \emph{how the model behaves
+over time} and \emph{how the service behaves in production} are never conflated
+(Figure~\ref{fig:screen_insights}).
+
+\bigshot{screen_insights}{The Insights tab}{Model-observation view for a project:
+the model-evolution chart tracking evaluation metrics across versions, a health
+verdict, the training and evaluation \gls{kpi} tiles, and the version/stage
+progression through Staging, Production, and Archived.}
 
 \subsection{Public Prediction API with API Keys}
 Deployment makes a model reachable from inside the platform; this sprint opens

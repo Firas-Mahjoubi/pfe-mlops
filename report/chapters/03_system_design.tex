@@ -68,8 +68,12 @@ module:
         \gls{api} keys (stored hashed); serve a public, key-authenticated
         prediction endpoint; generate ready-to-paste code snippets.
   \item \textbf{Monitoring}: display live cluster and per-pod resource metrics,
-        and per-project serving telemetry (request volume, error rate, latency,
-        timeline).
+        and a per-project serving view with request volume, error rate, latency,
+        and timeline, traffic split by origin (tester versus public \gls{api}),
+        and a per-deployment breakdown including each model's live \gls{cpu} and
+        memory usage.
+  \item \textbf{Insights}: track each model's evolution across versions with
+        evaluation \glspl{kpi}, a health verdict, and version/stage progression.
   \item \textbf{Diagnostics}: capture and surface the failure reason of a
         failed run so the user understands \emph{why} it failed.
   \item \textbf{Administration}: manage user accounts (activate, deactivate,

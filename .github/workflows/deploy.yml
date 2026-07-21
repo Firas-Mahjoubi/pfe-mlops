@@ -10,8 +10,8 @@ on:
 
 # WHERE we deploy (all from constants, never hard-coded in steps below).
 env:
-  ACR_NAME: acrmlopspfedemo
-  ACR_LOGIN_SERVER: acrmlopspfedemo.azurecr.io
+  ACR_NAME: acrmlopspfedemov2
+  ACR_LOGIN_SERVER: acrmlopspfedemov2.azurecr.io
   RESOURCE_GROUP: RG-FirasMahjoubi
   AKS_CLUSTER: aks-mlops-pfe
   HELM_RELEASE: mlops

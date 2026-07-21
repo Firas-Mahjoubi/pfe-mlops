@@ -1,0 +1,19 @@
+# Never copy host build artifacts into the image. In particular, a node_modules
+# installed on the host (e.g. Windows) would overwrite the container's `npm ci`
+# result and its .bin/ng would not be executable on Linux -> `ng: Permission
+# denied` (exit 126). Excluding it also shrinks the build context from ~300 MB
+# to a few MB.
+node_modules
+dist
+.angular
+coverage
+
+# VCS / editor / misc
+.git
+.gitignore
+.vscode
+.idea
+*.log
+npm-debug.log*
+Dockerfile*
+.dockerignore

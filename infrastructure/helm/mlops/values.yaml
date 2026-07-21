@@ -1,6 +1,6 @@
 # ─── Global / Image registry ────────────────────────────────────────────────
 image:
-  registry: acrmlopspfedemo.azurecr.io
+  registry: acrmlopspfedemov2.azurecr.io
   tag: v1
   pullPolicy: IfNotPresent
 
